@@ -1,8 +1,8 @@
 from models import SentimentClassifier
-from allennlp_models.classification.dataset_readers.stanford_sentiment_tree_bank import \
-    StanfordSentimentTreeBankDatasetReader
-from allennlp.data.token_indexers import SingleIdTokenIndexer
-from allennlp.data.vocabulary import Vocabulary
+#from allennlp_models.classification.dataset_readers.stanford_sentiment_tree_bank import \
+        #    StanfordSentimentTreeBankDatasetReader
+#from allennlp.data.token_indexers import SingleIdTokenIndexer
+#from allennlp.data.vocabulary import Vocabulary
 import torchtext
 from torch.utils.data import DataLoader
 from torch import optim
@@ -14,6 +14,8 @@ def get_vocab_size(dataloader):
     vocab = set()
     for batch in dataloader:
         inputs, labels = batch
+        #print(inputs.shape)
+        #print(labels.shape)
         for sequence in inputs:
             for word in sequence:
                 vocab.add(word.item())
@@ -54,26 +56,35 @@ def main():
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
 
-    tokenized_train = []
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #tokenized_train2 = []
 
     ### UNCOMMENT BELOW TO TOKENIZE FROM SCRATCH
-    for i,s in enumerate(train_dataset):
-        print(i)
-        tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
+    #for i,s in enumerate(train_dataset):
+    #    print(i)
+    #    tokenized_train2.append((tokenizing_sst2(s[0]), s[1]))
+    #    if i == 20:
+    #        break
 
-    tokenized = torch.cat(list(zip(*tokenized_train))[0])
-    np.save("tokenized_train.npy", np.asarray(tokenized))
-    np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
+    #tokenized = torch.cat(list(zip(*tokenized_train2))[0])
+    #np.save("tokenized_train.npy", np.asarray(tokenized))
+    #np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
 
     ### UNCOMMENT BELOW TO LOAD IN DATA FROM FILES
-    # tokenized_train = []
-    # training_data = np.load("tokenized_train.npy")
-    # training_labels = np.load("train_labels.npy")
-    # for i in range(training_labels.shape[0]):
-    #     tokenized_train.append((torch.tensor(training_data[i]), training_labels[i]))
-
-    trainloader = DataLoader(tokenized_train, batch_size = 1024)
-
+    tokenized_train = []
+    training_data = np.load("tokenized_train.npy")
+    training_labels = np.load("train_labels.npy")
+    for i in range(training_labels.shape[0]):
+        tokenized_train.append((torch.tensor(training_data[i*512:512*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
+    
+    #print(tokenized_train[0])
+    #print(tokenized_train2[0])
+    #print(len(tokenized_train))
+    #print(training_data.shape)
+    #print(training_labels.shape)
+    #return
+    trainloader = DataLoader(tokenized_train, batch_size = 512)
+    
     # val_dataset = torchtext.datasets.SST2(split = 'dev')
     # tokenized_val  = [tokenizer.tokenize(s) for s in val_dataset]
     # valloader = DataLoader(tokenized_val, batch_size = 1024)
@@ -91,7 +102,7 @@ def main():
     print(f"vocab size = {max_token}")
     embedding_dim = 300
     model = SentimentClassifier(batch_size, max_token, embedding_dim, embedding_weights)
-
+    model.to(device)
     optimizer = optim.Adam(model.parameters())
     loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -103,6 +114,8 @@ def main():
         for i, batch in enumerate(trainloader):
             count += 1
             inputs, labels = batch
+            inputs.to(device)
+            labels.to(device)
             preds = model(inputs)
             loss = loss_fn(preds, labels)
             loss.backward()
@@ -113,6 +126,7 @@ def main():
             total_loss += loss.item()
 
         print(f'Training Loss at epoch {epoch} : {total_loss / count}')
+        torch.save(model.state_dict(), "weights.npy")
 
 if __name__ == '__main__':
     main()

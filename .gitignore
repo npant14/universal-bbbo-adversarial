@@ -1,1 +1,5 @@
 __pycache__
+env/
+weights.npy
+tokenized_train.npy
+train_labels.npy
