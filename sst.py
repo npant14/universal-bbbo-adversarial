@@ -57,16 +57,16 @@ def main():
     train_dataset = torchtext.datasets.SST2(split = 'train')
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #tokenized_train2 = []
+    #tokenized_train = []
 
     ### UNCOMMENT BELOW TO TOKENIZE FROM SCRATCH
     #for i,s in enumerate(train_dataset):
     #    print(i)
-    #    tokenized_train2.append((tokenizing_sst2(s[0]), s[1]))
+    #    tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
     #    if i == 20:
     #        break
 
-    #tokenized = torch.cat(list(zip(*tokenized_train2))[0])
+    #tokenized = torch.cat(list(zip(*tokenized_train))[0])
     #np.save("tokenized_train.npy", np.asarray(tokenized))
     #np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
 
@@ -77,12 +77,6 @@ def main():
     for i in range(training_labels.shape[0]):
         tokenized_train.append((torch.tensor(training_data[i*512:512*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
     
-    #print(tokenized_train[0])
-    #print(tokenized_train2[0])
-    #print(len(tokenized_train))
-    #print(training_data.shape)
-    #print(training_labels.shape)
-    #return
     trainloader = DataLoader(tokenized_train, batch_size = 512)
     
     # val_dataset = torchtext.datasets.SST2(split = 'dev')
