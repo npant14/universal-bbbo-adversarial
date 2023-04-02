@@ -10,6 +10,6 @@ def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1
     if num_candidates > 1:
         elts, best_k_ids = torch.topk(grad_embeddings, num_candidates, dim=1)
         return best_k_ids.detach().cpu().numpy()[0]
-    _, best_at_step = grad_embedding.max(2)
+    _, best_at_step = grad_embedding.max(1)
     return best_at_step[0].detach().cpu().numpy()
     
