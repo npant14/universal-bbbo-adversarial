@@ -51,10 +51,7 @@ def main():
     ### UNCOMMENT BELOW TO TOKENIZE FROM SCRATCH
     #tokenized_train = []
     #for i,s in enumerate(train_dataset):
-    #    print(i)
     #    tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
-    #    if i == 20:
-    #        break
 
     #tokenized = torch.cat(list(zip(*tokenized_train))[0])
     #np.save("tokenized_train.npy", np.asarray(tokenized))
@@ -69,9 +66,21 @@ def main():
     
     trainloader = DataLoader(tokenized_train, batch_size = 512)
     
-    # val_dataset = torchtext.datasets.SST2(split = 'dev')
-    # tokenized_val  = [tokenizer.tokenize(s) for s in val_dataset]
-    # valloader = DataLoader(tokenized_val, batch_size = 1)
+
+    
+    val_dataset = torchtext.datasets.SST2(split = 'dev')
+    tokenized_val = []
+    for i, s in enumerate(val_dataset):
+        print(i)
+        tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
+    valloader = DataLoader(tokenized_val, batch_size = 1)
+
+    tokenized = torch.cat(list(zip(*tokenized_val))[0])
+    np.save("tokenized_val.npy", np.asarray(tokenized))
+    np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
+
+
+
 
     embedding_weights = None
     batch_size = 1
@@ -125,10 +134,9 @@ def main():
 
 
     ###
-    trainloader_fk = DataLoader(tokenized_train, batch_size = 1)
     postive_val_target = []
     ## batch size 1
-    for i, batch in enumerate(trainloader_fk):
+    for i, batch in enumerate(valloader):
         inputs, labels = batch
         if labels[0] == 0:
             ## append tuple of inputs labels
