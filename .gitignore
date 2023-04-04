@@ -3,3 +3,6 @@ env/
 weights.npy
 tokenized_train.npy
 train_labels.npy
+tokenized_val.npy
+val_labels.npy
+vocab_dump.pickle
