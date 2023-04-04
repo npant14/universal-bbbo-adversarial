@@ -1,4 +1,5 @@
 import torch
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class SentimentClassifier(torch.nn.Module):
     def __init__(self, batch_size, vocab_size, embedding_dim, embedding_weights):
@@ -18,9 +19,29 @@ class SentimentClassifier(torch.nn.Module):
                                     batch_first=True)
         self.classifier = torch.nn.Linear(in_features=512,
                                       out_features=2)
+
     def forward(self, tokens):
-        x = self.embedding(tokens)
+        ## tokens should be batch, [sequence, mask], 512
+
+        ## the sequences are the actual tokenized sequences
+        sequences = tokens[:, 0]
+
+        ## the masks are 1 if real, 0 if padding
+        masks = tokens[:, 1]
+
+        ## the number of actual tokens in the sequence
+        lengths = torch.sum(masks, dim=1)
+
+        ## pack padded index expects the sequences to be sorted in increasing order
+        lengths, perm_idx = lengths.sort(0, descending=True)
+        x = sequences[perm_idx]
+
+        x = self.embedding(x)
+        x = pack_padded_sequence(x, lengths, batch_first=True)
+
         x, (hn, cn) = self.encoder(x)
+
+        x, input_sizes = pad_packed_sequence(x, batch_first=True)
         x = self.classifier(x[:, -1, :])
 
         # should return (batch x 2) distribution
