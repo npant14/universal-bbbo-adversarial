@@ -11,6 +11,7 @@ from transformers import BertTokenizer
 import numpy as np
 from attack import hotflip
 import pickle
+from copy import deepcopy
 
 def get_vocab_size(dataloader):
     vocab = set()
@@ -46,6 +47,70 @@ def tokenizing_sst2(sentence):
     return torch.squeeze(tokenized_sentence['input_ids'])
     #return {'input_ids': torch.cat(input_ids, dim=0), 'attention_mask': torch.cat(attention_mask, dim=0)}
     
+
+def get_accuracy(model, device, dataloader, trigger_token_ids=None):
+    model.eval()
+    
+    if trigger_token_ids is None:
+        total_examples = 0
+        total_correct = 0
+        for batch in dataloader:
+            inputs, labels = batch
+            inputs.to(device)
+            labels.to(device)
+            
+            outputs = model(inputs)
+
+            # Total number of labels
+            total_examples += labels.size(0)
+
+            # Obtaining predictions from max value
+            _, predicted = torch.max(outputs.data, 1)
+
+            # Calculate the number of correct answers
+            print(predicted)
+            print(labels)
+            correct = (predicted == labels).sum().item()
+
+            total_correct += correct
+
+    else: ## trigger_token_ids is not None
+        total_examples = 0
+        total_correct = 0
+        for batch in dataloader:
+            inputs, labels = batch
+            inputs.to(device)
+            labels.to(device)
+            
+            trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
+            # print(f"trigger token ids {trigger_token_ids}")
+            # print(f"trigger sequence tensor {trigger_sequence_tensor}")
+            trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
+            # print(f"trigger sequence tensor after expansion {trigger_sequence_tensor}")
+
+            # print(trigger_sequence_tensor.shape)
+            # print(inputs.shape)
+            altered_inputs = torch.cat((trigger_sequence_tensor, inputs), 1)
+
+            outputs = model(altered_inputs)
+
+            # Total number of labels
+            total_examples += labels.size(0)
+
+            # Obtaining predictions from max value
+            _, predicted = torch.max(outputs.data, 1)
+
+            # Calculate the number of correct answers
+            print(predicted)
+            print(labels)
+            correct = (predicted == labels).sum().item()
+
+            total_correct += correct
+
+    acc = (total_correct / total_examples) * 100
+    print(acc)
+    return acc
+
     
 def main():
 
@@ -64,6 +129,14 @@ def main():
     #np.save("tokenized_train.npy", np.asarray(tokenized))
     #np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
 
+    #for i, s in enumerate(val_dataset):
+    #    print(i)
+    #    tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
+    #valloader = DataLoader(tokenized_val, batch_size = 1)
+    #tokenized = torch.cat(list(zip(*tokenized_val))[0])
+    #np.save("tokenized_val.npy", np.asarray(tokenized))
+    #np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
+    
     ### UNCOMMENT BELOW TO LOAD IN DATA FROM FILES
     tokenized_train = []
     training_data = np.load("tokenized_train.npy")
@@ -73,18 +146,8 @@ def main():
     
     trainloader = DataLoader(tokenized_train, batch_size = 512)
     
-
-    
     val_dataset = torchtext.datasets.SST2(split = 'dev')
     tokenized_val = []
-    #for i, s in enumerate(val_dataset):
-    #    print(i)
-    #    tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
-    #valloader = DataLoader(tokenized_val, batch_size = 1)
-    #tokenized = torch.cat(list(zip(*tokenized_val))[0])
-    #np.save("tokenized_val.npy", np.asarray(tokenized))
-    #np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
-    
     val_data = np.load("tokenized_val.npy")
     val_labels = np.load("val_labels.npy")
     for i in range(val_labels.shape[0]):
@@ -156,14 +219,16 @@ def main():
         if labels[0] == 0:
             ## append tuple of inputs labels
             positive_val_target.append(batch)
-
+    # positive_val_target_loader = DataLoader(positive_val_target, batch_size=1)
     ## get acc
+    print("initial val accuracy")
+    get_accuracy(model, device, positive_val_target)
 
     model.train()
 
     ## TODO: initialize which trigger token IDs to use
     #trigger_token_ids = [1]
-    trigger_token_ids = [tokenizing_sst2("the")[1]]
+    trigger_token_ids = [tokenizing_sst2("racist")[1]] * 10
     print(trigger_token_ids)
     target_label = 1
 
@@ -190,7 +255,9 @@ def main():
         average_grad = torch.sum(grads, dim=0).to(device)
         average_grad = average_grad[0:len(trigger_token_ids)]
 
-        candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids)
+        candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
+        get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
 
 
 
