@@ -20,7 +20,7 @@ def get_vocab_size(dataloader):
         inputs, labels = batch
         #print(inputs.shape)
         #print(labels.shape)
-        for sequence in inputs[0]:
+        for sequence in inputs[:,0]:
             for word in sequence:
                 vocab.add(word.item())
     print(vocab)
@@ -89,7 +89,7 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
 
             # Obtaining predictions from max value
             _, predicted = torch.max(outputs.data, 1)
-            print(outputs, predicted)
+            #print(outputs, predicted)
             # Calculate the number of correct answers
             correct = (predicted == labels).sum().item()
 
@@ -102,53 +102,59 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
     
 def main():
 
-    training_model = True
+    training_model = False
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cpu")
 
     ### UNCOMMENT BELOW TO TOKENIZE FROM SCRATCH
-    tokenized_train = []
-    for i,s in enumerate(train_dataset):
+    #tokenized_train = []
+    #for i,s in enumerate(train_dataset):
                             ## now has both sequence and mask
-        tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
+   #     print(i)
+   #     tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
 
-    tokenized = torch.cat(list(zip(*tokenized_train))[0])
-    np.save("tokenized_train.npy", np.asarray(tokenized))
-    np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
+    #tokenized = torch.cat(list(zip(*tokenized_train))[0])
+    #np.save("tokenized_train.npy", np.asarray(tokenized))
+    #np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
 
-    tokenized_val = []
-    for i, s in enumerate(val_dataset):
-        tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
-    tokenized = torch.cat(list(zip(*tokenized_val))[0])
-    np.save("tokenized_val.npy", np.asarray(tokenized))
-    np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
+    #tokenized_val = []
+    #for i, s in enumerate(val_dataset):
+    #    print(i)
+    #    tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
+    #tokenized = torch.cat(list(zip(*tokenized_val))[0])
+    #np.save("tokenized_val.npy", np.asarray(tokenized))
+    #np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
     
     ### UNCOMMENT BELOW TO LOAD IN DATA FROM FILES
-    # tokenized_train = []
-    # training_data = np.load("tokenized_train.npy")
-    # training_labels = np.load("train_labels.npy")
-    # for i in range(training_labels.shape[0]):
-    #     tokenized_train.append((torch.tensor(training_data[i*512:512*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
-    
-    
-    # tokenized_val = []
-    # val_data = np.load("tokenized_val.npy")
-    # val_labels = np.load("val_labels.npy")
-    # for i in range(val_labels.shape[0]):
-    #     tokenized_val.append((torch.tensor(val_data[i*512:512*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
+    tokenized_train = []
+    training_data = np.load("tokenized_train.npy")
+    training_labels = np.load("train_labels.npy")
+    for i in range(training_labels.shape[0]):
+        tokenized_train.append((torch.tensor(training_data[i*2:2*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
+    #print(tokenized_train[0][0].shape)
+    #print(tokenized_train[0][0][1])
+    #print(tokenized_train[0][1])
+    tokenized_val = []
+    val_data = np.load("tokenized_val.npy")
+    val_labels = np.load("val_labels.npy")
+    #print(val_data.shape)
+    #print(val_labels.shape)
+    for i in range(val_labels.shape[0]):
+        tokenized_val.append((torch.tensor(val_data[i*2:2*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
 
 
     trainloader = DataLoader(tokenized_train, batch_size = 512)
     valloader = DataLoader(tokenized_val, batch_size=1)
     embedding_weights = None
     batch_size = 1
-    vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
-    # with open("vocab_dump.pickle", "rb") as file:
-    #     loaded = pickle.load(file)
-    #     vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
+    #vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
+    with open("vocab_dump.pickle", "rb") as file:
+        loaded = pickle.load(file)
+        vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
     print(f"vocab size = {max_token}")
     embedding_dim = 300
     model = SentimentClassifier(batch_size, max_token, embedding_dim, embedding_weights)
@@ -165,6 +171,8 @@ def main():
             for i, batch in enumerate(trainloader):
                 count += 1
                 inputs, labels = batch
+                #print(inputs.shape)
+                #print(labels.shape)
                 inputs.to(device)
                 labels.to(device)
                 preds = model(inputs)
@@ -223,7 +231,8 @@ def main():
     print(f"positive val loader loop size {len(positive_val_target)}")
 
     for i, batch in enumerate(positive_val_target):
-        print(i, len(positive_val_target))
+        #print(i, len(positive_val_target))
+        model.train()
         inputs, labels = batch
         inputs.to(device)
         labels.to(device)
