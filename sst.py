@@ -1,6 +1,9 @@
 from models import SentimentClassifier
+from operator import itemgetter
+import heapq
+from copy import deepcopy
 import torchtext
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 from torch import optim
 import torch
 from transformers import BertTokenizer
@@ -76,6 +79,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
+            print(trigger_sequence_tensor.shape)
+            print(inputs[:,0].shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
             altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
             outputs = model(altered_inputs)
@@ -119,16 +124,22 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
         total_examples = 0
         total_loss = 0
         for batch in dataloader:
+            print(batch)
             inputs, labels = batch
             inputs.to(device)
             labels.to(device)
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
+            #print(trigger_sequence_tensor.shape)
+            #print(inputs[:,0].shape)
+            inputs = inputs.unsqueeze(0)
+            #print(inputs.shape)
+            #print(trigger_sequence_tensor.shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
             altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
             outputs = model(altered_inputs)
-            loss = loss_fn(preds, labels)
+            loss = loss_fn(outputs, labels)
 
             # Total number of labels
             total_examples += labels.size(0)
@@ -159,7 +170,7 @@ def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_to
     ##  for everything in the heapq
         for candidate, cand_loss in top_candidates:
     ##      collect list of losses at index
-            loss_per_candidate.extend(get_loss_per_candidate(idx, model, batch, cand,
+            loss_per_candidate.extend(get_loss_per_candidate(idx, model, batch, candidate,
                                                              cand_trigger_token_ids, device))
     ##      update heapq with new top n tokens
         top_candidates = heapq.nlargest(beam_size, loss_per_candidate, key=itemgetter(1))
@@ -175,15 +186,18 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate = []
 
     # get_loss(model, device, dataloader, trigger_token_ids=None):
-    cur_loss = get_loss(model, device, DataLoader(batch), trigger_token_ids)
-    loss_per_candidate.append((deepcopy(trigger_token_ids).to(device), cur_loss))
+    #print(batch[0][0].shape)
+    #print(batch[1])
+
+    cur_loss = get_loss(model, device, [(batch[0][0], batch[1])], trigger_token_ids)
+    loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
     for candidate in cand_trigger_token_ids[index]:
-        triggers_one_replaced = deepcopy(trigger_token_ids).to(device)
+        triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
-        loss = get_loss(model, device, DataLoader(batch), triggers_one_replaced)
-        loss_per_candidate.append((deepcopy(triggers_one_replaced).to(device), loss))
+        loss = get_loss(model, device, [(batch[0][0], batch[1])], triggers_one_replaced)
+        loss_per_candidate.append((deepcopy(triggers_one_replaced), loss))
 
     ## expected return in code we are copying is 
     ## list(tuple(list of tokens, loss)) 
@@ -203,9 +217,9 @@ def main():
     if tokenize_from_scratch:
         tokenized_train = []
         for i,s in enumerate(train_dataset):
-                                # now has both sequence and mask
-        print(i)
-        tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
+            # now has both sequence and mask
+            print(i)
+            tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
 
         tokenized = torch.cat(list(zip(*tokenized_train))[0])
         np.save("tokenized_train.npy", np.asarray(tokenized))
@@ -340,15 +354,16 @@ def main():
         average_grad = average_grad[0:len(trigger_token_ids)]
 
         candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        candidate_trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids)
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
         get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
 
-# open the file in the write mode
-f = open('output.csv', 'w')
-# create the csv writer
-writer = csv.writer(f)
-# write candidate trigger tokens to the csv
-writer.writerow([vocab_map[idx] for idx in candidate_trigger_token_ids])
+    # open the file in the write mode
+    f = open('output.csv', 'w')
+    # create the csv writer
+    writer = csv.writer(f)
+    # write candidate trigger tokens to the csv
+    writer.writerow([vocab_map[idx] for idx in candidate_trigger_token_ids])
 
 
 if __name__ == '__main__':
