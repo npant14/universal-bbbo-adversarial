@@ -79,8 +79,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
-            print(trigger_sequence_tensor.shape)
-            print(inputs[:,0].shape)
+            #print(trigger_sequence_tensor.shape)
+            #print(inputs[:,0].shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
             altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
             outputs = model(altered_inputs)
@@ -124,7 +124,7 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
         total_examples = 0
         total_loss = 0
         for batch in dataloader:
-            print(batch)
+            #print(batch)
             inputs, labels = batch
             inputs.to(device)
             labels.to(device)
@@ -357,13 +357,16 @@ def main():
         candidate_trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids)
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
         get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
+        #break
 
     # open the file in the write mode
     f = open('output.csv', 'w')
     # create the csv writer
     writer = csv.writer(f)
     # write candidate trigger tokens to the csv
-    writer.writerow([vocab_map[idx] for idx in candidate_trigger_token_ids])
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    #print(vocab_map)
+    writer.writerow([tokenizer.decode(idx.item()) for idx in candidate_trigger_token_ids])
 
 
 if __name__ == '__main__':
