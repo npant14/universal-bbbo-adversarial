@@ -1,8 +1,4 @@
 from models import SentimentClassifier
-#from allennlp_models.classification.dataset_readers.stanford_sentiment_tree_bank import \
-        #    StanfordSentimentTreeBankDatasetReader
-#from allennlp.data.token_indexers import SingleIdTokenIndexer
-#from allennlp.data.vocabulary import Vocabulary
 import torchtext
 from torch.utils.data import DataLoader
 from torch import optim
@@ -11,7 +7,7 @@ from transformers import BertTokenizer
 import numpy as np
 from attack import hotflip
 import pickle
-from copy import deepcopy
+import csv
 
 def get_vocab_size(dataloader):
     vocab = set()
@@ -99,10 +95,104 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
     print(acc)
     return acc
 
-    
+def get_loss(model, device, dataloader, trigger_token_ids=None):
+    model.eval()
+    loss_fn = torch.nn.CrossEntropyLoss()
+
+    if trigger_token_ids is None:
+        total_examples = 0
+        total_correct = 0
+        for batch in dataloader:
+            inputs, labels = batch
+            inputs.to(device)
+            labels.to(device)
+            
+            outputs = model(inputs)
+            loss = loss_fn(preds, labels)
+
+            # Total number of labels
+            total_examples += labels.size(0)
+
+            total_loss += loss.item()
+
+    else: ## trigger_token_ids is not None
+        total_examples = 0
+        total_loss = 0
+        for batch in dataloader:
+            inputs, labels = batch
+            inputs.to(device)
+            labels.to(device)
+            
+            trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
+            trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
+            altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
+            altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
+            outputs = model(altered_inputs)
+            loss = loss_fn(preds, labels)
+
+            # Total number of labels
+            total_examples += labels.size(0)
+
+            total_loss += loss.item()
+
+    loss = total_loss / total_examples
+    print(loss)
+    return loss
+
+def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_token_ids, beam_size=1):
+    """
+    Given the list of candidate trigger token ids (of number of trigger words by number of candidates
+    per word), it finds the best new candidate trigger.
+    This performs beam search in a left to right fashion.
+    """
+    ## maintain a heapq
+
+    ## run on index 0 for candidates
+    loss_per_candidate = get_loss_per_candidate(0, model, batch, trigger_token_ids,
+                                                cand_trigger_token_ids, device)
+
+    ## this is a list that is (beam size) long sorted by maximum loss
+    top_candidates = heapq.nlargest(beam_size, loss_per_candidate, key=itemgetter(1))
+    ## for len trigger tokens (1-end)
+    for idx in range(1, len(trigger_token_ids)):
+        loss_per_candidate = []
+    ##  for everything in the heapq
+        for candidate, cand_loss in top_candidates:
+    ##      collect list of losses at index
+            loss_per_candidate.extend(get_loss_per_candidate(idx, model, batch, cand,
+                                                             cand_trigger_token_ids, device))
+    ##      update heapq with new top n tokens
+        top_candidates = heapq.nlargest(beam_size, loss_per_candidate, key=itemgetter(1))
+    ## return final top n tokens
+    return max(top_candidates, key=itemgetter(1))[0]
+
+def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_token_ids, device):
+    """
+    For a particular index, the function tries all of the candidate tokens for that index.
+    The function returns a list containing the candidate triggers it tried, along with their loss.
+    """
+    ## evaluate loss on current set of best trigger token ids
+    loss_per_candidate = []
+
+    # get_loss(model, device, dataloader, trigger_token_ids=None):
+    cur_loss = get_loss(model, device, DataLoader(batch), trigger_token_ids)
+    loss_per_candidate.append((deepcopy(trigger_token_ids).to(device), cur_loss))
+
+    ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
+    for candidate in cand_trigger_token_ids[index]:
+        triggers_one_replaced = deepcopy(trigger_token_ids).to(device)
+        triggers_one_replaced[index] = candidate
+        loss = get_loss(model, device, DataLoader(batch), triggers_one_replaced)
+        loss_per_candidate.append((deepcopy(triggers_one_replaced).to(device), loss))
+
+    ## expected return in code we are copying is 
+    ## list(tuple(list of tokens, loss)) 
+    return loss_per_candidate
+
 def main():
 
     training_model = False
+    tokenize_from_scratch = False
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
@@ -110,41 +200,36 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = torch.device("cpu")
 
-    ### UNCOMMENT BELOW TO TOKENIZE FROM SCRATCH
-    #tokenized_train = []
-    #for i,s in enumerate(train_dataset):
-                            ## now has both sequence and mask
-   #     print(i)
-   #     tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
+    if tokenize_from_scratch:
+        tokenized_train = []
+        for i,s in enumerate(train_dataset):
+                                # now has both sequence and mask
+        print(i)
+        tokenized_train.append((tokenizing_sst2(s[0]), s[1]))
 
-    #tokenized = torch.cat(list(zip(*tokenized_train))[0])
-    #np.save("tokenized_train.npy", np.asarray(tokenized))
-    #np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
+        tokenized = torch.cat(list(zip(*tokenized_train))[0])
+        np.save("tokenized_train.npy", np.asarray(tokenized))
+        np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
 
-    #tokenized_val = []
-    #for i, s in enumerate(val_dataset):
-    #    print(i)
-    #    tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
-    #tokenized = torch.cat(list(zip(*tokenized_val))[0])
-    #np.save("tokenized_val.npy", np.asarray(tokenized))
-    #np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
-    
-    ### UNCOMMENT BELOW TO LOAD IN DATA FROM FILES
-    tokenized_train = []
-    training_data = np.load("tokenized_train.npy")
-    training_labels = np.load("train_labels.npy")
-    for i in range(training_labels.shape[0]):
-        tokenized_train.append((torch.tensor(training_data[i*2:2*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
-    #print(tokenized_train[0][0].shape)
-    #print(tokenized_train[0][0][1])
-    #print(tokenized_train[0][1])
-    tokenized_val = []
-    val_data = np.load("tokenized_val.npy")
-    val_labels = np.load("val_labels.npy")
-    #print(val_data.shape)
-    #print(val_labels.shape)
-    for i in range(val_labels.shape[0]):
-        tokenized_val.append((torch.tensor(val_data[i*2:2*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
+        tokenized_val = []
+        for i, s in enumerate(val_dataset):
+           print(i)
+           tokenized_val.append((tokenizing_sst2(s[0]), s[1]))
+        tokenized = torch.cat(list(zip(*tokenized_val))[0])
+        np.save("tokenized_val.npy", np.asarray(tokenized))
+        np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
+    else: # not tokenize_from_scratch
+        tokenized_train = []
+        training_data = np.load("tokenized_train.npy")
+        training_labels = np.load("train_labels.npy")
+        for i in range(training_labels.shape[0]):
+            tokenized_train.append((torch.tensor(training_data[i*2:2*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
+
+        tokenized_val = []
+        val_data = np.load("tokenized_val.npy")
+        val_labels = np.load("val_labels.npy")
+        for i in range(val_labels.shape[0]):
+            tokenized_val.append((torch.tensor(val_data[i*2:2*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
 
 
     trainloader = DataLoader(tokenized_train, batch_size = 512)
@@ -258,7 +343,12 @@ def main():
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
         get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
 
-
+# open the file in the write mode
+f = open('output.csv', 'w')
+# create the csv writer
+writer = csv.writer(f)
+# write candidate trigger tokens to the csv
+writer.writerow([vocab_map[idx] for idx in candidate_trigger_token_ids])
 
 
 if __name__ == '__main__':
