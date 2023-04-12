@@ -1,4 +1,5 @@
 from models import SentimentClassifier
+from ngrams import basic_clean
 from operator import itemgetter
 import heapq
 from copy import deepcopy
@@ -33,6 +34,9 @@ def get_vocab_size(dataloader):
 def tokenizing_sst2(sentence):
     input_ids = []
     attention_mask = []
+    print(sentence)
+    sentence = ' '.join(basic_clean(sentence))
+    print(sentence)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     tokenized_sentence = tokenizer.encode_plus(sentence,
@@ -206,7 +210,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 def main():
 
     training_model = False
-    tokenize_from_scratch = False
+    tokenize_from_scratch = True
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
