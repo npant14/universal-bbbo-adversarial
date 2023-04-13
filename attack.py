@@ -25,23 +25,43 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
     ## returns 10x10 numpy array 
 
     ## run model on adv_token padded to 512
-
+    
     ## outputs = []
-
+    outputs = []
     ## for token in adv_token_ids:
+    for i, token in enumerate(adv_token_ids):
+        ##  replace token with unk (100)
+        copied_list = np.array(adv_token_ids)
+        copied_list[i] = 100
+        ##  run model on new sentence padded to 512
+        padded_sentence = np.pad(copied_list, (0, 512 - len(adv_token_ids)), 'constant')
+        mask = torch.zeros(512)
+        mask[0:10] = 1
+        mask[i] = 0
+        torch_padded_sentence =  torch.from_numpy(padded_sentence)
+        output = model((torch_padded_sentence, mask)
+        ##  append outputs to outputs[] 
 
-    ##  replace token with unk (100)
-
-    ##  run model on new sentence padded to 512
-
-    ##  append outputs to outputs[] 
-
-    ## outputs is shape 10x2
+        outputs.append(output) ## ALSO NOT RIGHT, NEED TO SOFTMAX
+        ## outputs is shape 10x2
 
     ## pick the output with the lowest probability of adversarial label
-
+    ## so min val of dim 1
+    outputs = np.array(outputs)
+    worst_index = np.argmin(outputs, axis=1)
     ## get synset for worst word --> pick out num_candidates that are in the vocab
-
+    worst_word_tokenized = adv_token_ids[worst_index]
+    worst_word = tokenizer.decode(worst_word_tokenized)
+    worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
+    concat_worst_word_synset = sum(worst_word_synset, [])
     ## replace worst word with each synonym 
-
+    new_candidate_tokens = []
+    for cand in concat_worst_word_synset:
+        encoded_new_word = encoder.encode(cand)
+        if cand in vocab:
+            copied_list = np.array(adv_token_ids)
+            # how does encoding single word work? not clear.
+            copied_list[worst_index] = encoded_new_word
+            new_candidate_tokens.append(copied_list)
     ## return new candidate tokens
+    return np.array(new_candidate_tokens)
