@@ -327,6 +327,8 @@ def main():
     model.train()
 
     ## TODO: initialize which trigger token IDs to use
+
+    ## start with 10 random words here (not just always racist)
     trigger_token_ids = [tokenizing_sst2("racist")[0][1]] * 10
     print(trigger_token_ids)
     target_label = 1
@@ -356,6 +358,10 @@ def main():
         label = original_labels.to(device)
         average_grad = torch.sum(grads, dim=0).to(device)
         average_grad = average_grad[0:len(trigger_token_ids)]
+
+        ## want to replace this 
+        ## 10x10 matrix
+        ## in general (num candidates x num tokens in trigger string)
 
         candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
         candidate_trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids)
