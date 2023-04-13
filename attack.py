@@ -42,6 +42,9 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
         output = model((torch_padded_sentence, mask)
         ##  append outputs to outputs[] 
 
+        ####### VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0
+        sm = nn.Softmax(dim=1)
+        output = sm(output)
         outputs.append(output) ## ALSO NOT RIGHT, NEED TO SOFTMAX
         ## outputs is shape 10x2
 
@@ -57,10 +60,10 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
     ## replace worst word with each synonym 
     new_candidate_tokens = []
     for cand in concat_worst_word_synset:
-        encoded_new_word = encoder.encode(cand)
-        if cand in vocab:
+        encoded_new_word = encoder.encode(cand)[1]
+        if encoded_new_word in vocab:
             copied_list = np.array(adv_token_ids)
-            # how does encoding single word work? not clear.
+            # how does encoding single word work? I assume it's just the second index, bc you skip start token, but not sure...?
             copied_list[worst_index] = encoded_new_word
             new_candidate_tokens.append(copied_list)
     ## return new candidate tokens
