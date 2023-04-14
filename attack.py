@@ -39,19 +39,19 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
         mask[0:10] = 1
         mask[i] = 0
         torch_padded_sentence =  torch.from_numpy(padded_sentence)
-        output = model((torch_padded_sentence, mask)
+        output = model((torch_padded_sentence, mask))
         ##  append outputs to outputs[] 
 
-        ####### VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0
+        ####### TODO: VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0
         sm = nn.Softmax(dim=1)
         output = sm(output)
-        outputs.append(output) ## ALSO NOT RIGHT, NEED TO SOFTMAX
+        outputs.append(output) ## TODO: NEED TO SOFTMAX
         ## outputs is shape 10x2
 
     ## pick the output with the lowest probability of adversarial label
-    ## so min val of dim 1
+    ## so min val of second column
     outputs = np.array(outputs)
-    worst_index = np.argmin(outputs, axis=1)
+    worst_index = np.argmin(outputs[:,1])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
     worst_word_tokenized = adv_token_ids[worst_index]
     worst_word = tokenizer.decode(worst_word_tokenized)
@@ -64,7 +64,9 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
         if encoded_new_word in vocab:
             copied_list = np.array(adv_token_ids)
             # how does encoding single word work? I assume it's just the second index, bc you skip start token, but not sure...?
+            ## yes
             copied_list[worst_index] = encoded_new_word
             new_candidate_tokens.append(copied_list)
     ## return new candidate tokens
+    ## this is going to return < 10 
     return np.array(new_candidate_tokens)
