@@ -1,5 +1,5 @@
 import torch
-import numpy
+import numpy as np
 from nltk.corpus import wordnet as wn
 
 def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1):
@@ -20,12 +20,13 @@ def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1
 def bigramtokens(adv_token_ids):
     pass
 
-def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates=1):
+def synattack(adv_token_ids, vocab, tokenizer, adversarial_label,model, num_candidates=1):
     ## adv_token_ids shape: 10, (list)
     ## returns 10x10 numpy array 
 
     ## run model on adv_token padded to 512
     
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     ## outputs = []
     outputs = []
     ## for token in adv_token_ids:
@@ -35,28 +36,40 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
         copied_list[i] = 100
         ##  run model on new sentence padded to 512
         padded_sentence = np.pad(copied_list, (0, 512 - len(adv_token_ids)), 'constant')
-        mask = torch.zeros(512)
+        mask = torch.zeros(512, dtype=torch.int64)
         mask[0:10] = 1
         mask[i] = 0
-        torch_padded_sentence =  torch.from_numpy(padded_sentence)
-        output = model((torch_padded_sentence, mask))
+        torch_padded_sentence =  torch.from_numpy(padded_sentence).to(dtype=torch.long)
+        #inputs = torch.tensor([torch_padded_sentence, mask])
+        inputs = torch.stack([torch_padded_sentence, mask], dim=0)
+        inputs = torch.unsqueeze(inputs, 0).to(device)
+        output = model(inputs)
         ##  append outputs to outputs[] 
 
         ####### TODO: VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0
-        sm = nn.Softmax(dim=1)
+        sm = torch.nn.Softmax(dim=1)
         output = sm(output)
-        outputs.append(output) ## TODO: NEED TO SOFTMAX
+        outputs.append(output)
         ## outputs is shape 10x2
 
     ## pick the output with the lowest probability of adversarial label
     ## so min val of second column
-    outputs = np.array(outputs)
-    worst_index = np.argmin(outputs[:,1])
+    ##outputs = torch.tensor(outputs)
+    outputs = torch.stack(outputs, dim=0)
+    #print(outputs.shape)
+    outputs = torch.squeeze(outputs)
+    worst_index = torch.argmin(outputs[:,1])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
     worst_word_tokenized = adv_token_ids[worst_index]
     worst_word = tokenizer.decode(worst_word_tokenized)
-    worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
-    concat_worst_word_synset = sum(worst_word_synset, [])
+    #worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
+    #concat_worst_word_synset = sum(worst_word_synset, [])
+    synonyms = []
+    for syn in wn.synsets(worst_word):
+        for l in syn.lemmas():
+            synonyms.append(l.name())
+    concat_worst_word_synset = set(synonyms)
+
     ## replace worst word with each synonym 
     new_candidate_tokens = []
     for cand in concat_worst_word_synset:
@@ -69,4 +82,5 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
             new_candidate_tokens.append(copied_list)
     ## return new candidate tokens
     ## this is going to return < 10 
+    #return new_candidate_tokens.detach().to(device).cpu().numpy()
     return np.array(new_candidate_tokens)

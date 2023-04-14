@@ -9,7 +9,7 @@ from torch import optim
 import torch
 from transformers import BertTokenizer
 import numpy as np
-from attack import hotflip
+from attack import hotflip, synattack
 import pickle
 import csv
 
@@ -363,7 +363,9 @@ def main():
         ## 10x10 matrix
         ## in general (num candidates x num tokens in trigger string)
 
-        candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        #candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label,model, num_candidates=10)
 
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
         get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
