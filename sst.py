@@ -210,7 +210,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 def main():
 
     training_model = False
-    tokenize_from_scratch = True
+    tokenize_from_scratch = False
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
