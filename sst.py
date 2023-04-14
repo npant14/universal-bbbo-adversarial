@@ -364,7 +364,7 @@ def main():
         ## in general (num candidates x num tokens in trigger string)
 
         candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
-        candidate_trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids)
+
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
         get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
         #break
