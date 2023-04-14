@@ -39,7 +39,7 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, num_candidates
         mask[0:10] = 1
         mask[i] = 0
         torch_padded_sentence =  torch.from_numpy(padded_sentence)
-        output = model((torch_padded_sentence, mask)
+        output = model((torch_padded_sentence, mask))
         ##  append outputs to outputs[] 
 
         ####### VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0

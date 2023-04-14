@@ -34,9 +34,9 @@ def get_vocab_size(dataloader):
 def tokenizing_sst2(sentence):
     input_ids = []
     attention_mask = []
-    print(sentence)
+    #print(sentence)
     sentence = ' '.join(basic_clean(sentence))
-    print(sentence)
+    #print(sentence)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     tokenized_sentence = tokenizer.encode_plus(sentence,
