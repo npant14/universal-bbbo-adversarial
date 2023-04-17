@@ -83,8 +83,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
-            #print(trigger_sequence_tensor.shape)
-            #print(inputs[:,0].shape)
+            print(trigger_sequence_tensor.shape)
+            print(inputs[:,0].shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
             altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
             outputs = model(altered_inputs)
@@ -254,7 +254,7 @@ def main():
     valloader = DataLoader(tokenized_val, batch_size=1)
     embedding_weights = None
     batch_size = 1
-    #vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
+    # vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
     with open("vocab_dump.pickle", "rb") as file:
         loaded = pickle.load(file)
         vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
@@ -316,7 +316,7 @@ def main():
         labels.to(device)
         if labels[0] == 0:
             ## append tuple of inputs labels
-            positive_val_target.append(batch)
+            positive_val_target.append((inputs, labels))
 
     ## get acc
     print("initial training accuracy")
@@ -329,7 +329,7 @@ def main():
     ## TODO: initialize which trigger token IDs to use
 
     ## start with 10 random words here (not just always racist)
-    trigger_token_ids = [tokenizing_sst2("racist")[0][1]] * 10
+    trigger_token_ids = [tokenizing_sst2("black")[0][1]] * 10
     print(trigger_token_ids)
     target_label = 1
 
@@ -366,9 +366,10 @@ def main():
         #candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
         tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label,model, num_candidates=10)
-
+        
+        trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
         print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
-        get_accuracy(model, device, positive_val_target, candidate_trigger_token_ids)
+        get_accuracy(model, device, positive_val_target, trigger_token_ids)
         #break
 
     # open the file in the write mode

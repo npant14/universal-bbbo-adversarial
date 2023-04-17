@@ -61,7 +61,9 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label,model, num_cand
     worst_index = torch.argmin(outputs[:,1])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
     worst_word_tokenized = adv_token_ids[worst_index]
-    worst_word = tokenizer.decode(worst_word_tokenized)
+    worst_word = tokenizer.decode([100,worst_word_tokenized,101]).split(" ",1)[1].rsplit(" ", 1)[0]
+    #print(worst_word)
+    #worst_word.replace(" ", "")
     #worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
     #concat_worst_word_synset = sum(worst_word_synset, [])
     synonyms = []
@@ -72,8 +74,16 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label,model, num_cand
 
     ## replace worst word with each synonym 
     new_candidate_tokens = []
+    print(concat_worst_word_synset)
     for cand in concat_worst_word_synset:
-        encoded_new_word = encoder.encode(cand)[1]
+        #print(cand)
+        encoded_new_word = tokenizer.encode(cand)
+        if len(encoded_new_word) > 3:
+            continue
+        encoded_new_word = encoded_new_word[1]
+        if (encoded_new_word == worst_word_tokenized.item()):
+            continue
+        #print(encoded_new_word)
         if encoded_new_word in vocab:
             copied_list = np.array(adv_token_ids)
             # how does encoding single word work? I assume it's just the second index, bc you skip start token, but not sure...?
