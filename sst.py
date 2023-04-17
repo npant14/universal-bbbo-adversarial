@@ -23,7 +23,7 @@ def get_vocab_size(dataloader):
         for sequence in inputs[:,0]:
             for word in sequence:
                 vocab.add(word.item())
-    print(vocab)
+    # print(vocab)
     vocab = list(vocab)
     for i, word in enumerate(vocab):
         vocab_map[word] = i
@@ -83,8 +83,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
-            print(trigger_sequence_tensor.shape)
-            print(inputs[:,0].shape)
+            # print(trigger_sequence_tensor.shape)
+            # print(inputs[:,0].shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
             altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
             outputs = model(altered_inputs)
@@ -101,7 +101,6 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             total_correct += correct
 
     acc = (total_correct / total_examples) * 100
-    print(acc)
     return acc
 
 def get_loss(model, device, dataloader, trigger_token_ids=None):
@@ -151,7 +150,7 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
             total_loss += loss.item()
 
     loss = total_loss / total_examples
-    print(loss)
+    # print(loss)
     return loss
 
 def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_token_ids, beam_size=1):
@@ -197,7 +196,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
-    for candidate in cand_trigger_token_ids[index]:
+    for candidate in cand_trigger_token_ids[:,index]:
         triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
         loss = get_loss(model, device, [(batch[0][0], batch[1])], triggers_one_replaced)
@@ -320,9 +319,9 @@ def main():
 
     ## get acc
     print("initial training accuracy")
-    get_accuracy(model, device, trainloader)
+    print(get_accuracy(model, device, trainloader))
     print("initial val accuracy")
-    get_accuracy(model, device, positive_val_target)
+    print(get_accuracy(model, device, positive_val_target))
 
     model.train()
 
@@ -330,10 +329,11 @@ def main():
 
     ## start with 10 random words here (not just always racist)
     trigger_token_ids = [tokenizing_sst2("black")[0][1]] * 10
-    print(trigger_token_ids)
+    # print(trigger_token_ids)
+
     target_label = 1
 
-    print(f"positive val loader loop size {len(positive_val_target)}")
+    # print(f"positive val loader loop size {len(positive_val_target)}")
 
     for i, batch in enumerate(positive_val_target):
         #print(i, len(positive_val_target))
@@ -363,14 +363,14 @@ def main():
         ## 10x10 matrix
         ## in general (num candidates x num tokens in trigger string)
 
-        #candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        # candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
         tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label,model, num_candidates=10)
+        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label, model, num_candidates=10)
         
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
-        print(f"accuracy on round {i} with candidate tokens {candidate_trigger_token_ids}")
-        get_accuracy(model, device, positive_val_target, trigger_token_ids)
-        #break
+        print(f"accuracy on round {i}: {get_accuracy(model, device, positive_val_target, trigger_token_ids)}")
+        # get_accuracy(model, device, positive_val_target, trigger_token_ids)
+        # break
 
     # open the file in the write mode
     f = open('output.csv', 'w')
@@ -378,8 +378,9 @@ def main():
     writer = csv.writer(f)
     # write candidate trigger tokens to the csv
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    #print(vocab_map)
-    writer.writerow([tokenizer.decode(idx.item()) for idx in candidate_trigger_token_ids])
+    for candidate in candidate_trigger_token_ids:
+        writer.writerow([tokenizer.decode(idx.item()) for idx in candidate])
+        writer.writerow([])
 
 
 if __name__ == '__main__':
