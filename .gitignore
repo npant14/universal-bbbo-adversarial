@@ -8,3 +8,4 @@ tokenized_val.npy
 val_labels.npy
 vocab_dump.pickle
 *.csv
+token_dicts.pkl

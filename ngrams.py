@@ -49,6 +49,6 @@ def basic_clean_ngram(text):
     return [wnl.lemmatize(word) for word in words if word not in stopwords]
 
 
-tb = get_data("tweets.csv")
+# tb = get_data("tweets.csv")
 
-get_next_words(tb)
+# get_next_words(tb)
