@@ -27,7 +27,8 @@ def get_next_words(bigrams_series):
             word_pairs[row[0][0]] = [row[0][1]]
 
 
-    print(word_pairs)
+    #print(word_pairs)
+    return word_pairs
 
 def basic_clean(text):
     wnl = nltk.stem.WordNetLemmatizer()

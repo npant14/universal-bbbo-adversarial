@@ -1,5 +1,5 @@
 from models import SentimentClassifier
-from ngrams import basic_clean
+from ngrams import basic_clean, get_data, get_next_words
 from operator import itemgetter
 import heapq
 from copy import deepcopy
@@ -12,6 +12,7 @@ import numpy as np
 from attack import hotflip, synattack
 import pickle
 import csv
+import random
 
 def get_vocab_size(dataloader):
     vocab = set()
@@ -31,6 +32,19 @@ def get_vocab_size(dataloader):
         pickle.dump({"vocab_len": len(vocab), "max_token": max(vocab) + 1, "vocab": vocab, "vocab_map": vocab_map}, file, protocol=pickle.HIGHEST_PROTOCOL)
     return len(vocab), max(vocab) + 1, vocab, vocab_map
     
+def initialize_tokens(initial_word, length):
+    
+    tb = get_data("tweets.csv")
+    bigram_dict = get_next_words(tb)
+    words = [initial_word]
+    for i in range(1, length):
+        if words[-1] in bigram_dict:
+            words.append(bigram_dict[words[-1]][0])
+        else:
+            random_num = random.randint(0,len(bigram_dict.keys()) - 1)
+            words.append(bigram_dict.keys()[random_num])
+    return words
+
 def tokenizing_sst2(sentence):
     input_ids = []
     attention_mask = []
@@ -328,9 +342,16 @@ def main():
     ## TODO: initialize which trigger token IDs to use
 
     ## start with 10 random words here (not just always racist)
-    trigger_token_ids = [tokenizing_sst2("black")[0][1]] * 10
-    # print(trigger_token_ids)
+    #trigger_token_ids = [tokenizing_sst2("black")[0][1]] * 10
+    initial_word = "black"
+    trigger_len = 5
+    trigger_token_ids = initialize_tokens(initial_word, trigger_len)
+    print(trigger_token_ids)
 
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    trigger_token_ids = [tokenizer.encode(word) for word in trigger_token_ids]
+    print(trigger_token_ids)
+    return
     target_label = 1
 
     # print(f"positive val loader loop size {len(positive_val_target)}")
@@ -364,7 +385,6 @@ def main():
         ## in general (num candidates x num tokens in trigger string)
 
         # candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
-        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label, model, num_candidates=10)
         
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
