@@ -36,10 +36,15 @@ class SentimentClassifier(torch.nn.Module):
         ## pack padded index expects the sequences to be sorted in increasing order
         lengths, perm_idx = lengths.sort(0, descending=True)
         x = sequences[perm_idx]
+        
+        print(torch.min(x))
+        print(torch.max(x))
         x = self.embedding(x)
         #lengths = Variable(torch.LongTensor(lengths.cpu()))
-        x = pack_padded_sequence(x, lengths.cpu(), batch_first=True)
-
+        #print(x.shape)
+        #print(lengths.shape)
+        x = pack_padded_sequence(x, lengths.tolist(), batch_first=True)
+        
         x, (hn, cn) = self.encoder(x)
 
         x, input_sizes = pad_packed_sequence(x, batch_first=True)

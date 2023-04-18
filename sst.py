@@ -13,6 +13,9 @@ from attack import hotflip, synattack
 import pickle
 import csv
 import random
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 
 def get_vocab_size(dataloader):
     vocab = set()
@@ -234,7 +237,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 def main():
 
     training_model = True
-    tokenize_from_scratch = True
+    tokenize_from_scratch = False
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
@@ -292,7 +295,7 @@ def main():
         for i in range(val_labels.shape[0]):
             tokenized_val.append((torch.tensor(val_data[i*2:2*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
         
-        with open('saved_dictionary.pkl', 'rb') as f:
+        with open('token_dicts.pkl', 'rb') as f:
             token_dict, untoken_dict = pickle.load(f)
 
     trainloader = DataLoader(tokenized_train, batch_size = 512)
@@ -306,6 +309,7 @@ def main():
         with open("vocab_dump.pickle", "rb") as file:
             loaded = pickle.load(file)
             vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
+            #max_token = len(token_dict)
     print(f"vocab size = {max_token}")
     embedding_dim = 300
     model = SentimentClassifier(batch_size, max_token, embedding_dim, embedding_weights)
@@ -322,10 +326,10 @@ def main():
             for i, batch in enumerate(trainloader):
                 count += 1
                 inputs, labels = batch
-                #print(inputs.shape)
-                #print(labels.shape)
-                inputs.to(device)
-                labels.to(device)
+                print(inputs.shape)
+                print(labels.shape)
+                inputs = inputs.to(device)
+                labels = labels.to(device)
                 preds = model(inputs)
                 loss = loss_fn(preds, labels)
                 loss.backward()
