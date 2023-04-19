@@ -50,7 +50,7 @@ def initialize_tokens(initial_word, length):
 
 def tokenize_word(word, token_dict, untoken_dict):
     if word not in token_dict:
-        token = len(token_dict)
+        token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
         token_dict[word] = token
         untoken_dict[token] = word
     return token_dict[word]
@@ -63,13 +63,13 @@ def tokenizing_sst2(sentence, token_dict, untoken_dict):
     #print(sentence)
     # tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
-    tokenized_sentence = [-1]
+    tokenized_sentence = [0]
     
     for word in sentence:
         token = tokenize_word(word, token_dict, untoken_dict)
         tokenized_sentence.append(token)
 
-    tokenized_sentence.append(-2)
+    tokenized_sentence.append(1)
     tokenized_sentence  = tokenized_sentence +  [0] * (512 - len(tokenized_sentence))
     attention_mask = [1] * (len(tokenized_sentence)) + [0] * (512 - len(tokenized_sentence))
 
@@ -237,7 +237,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 def main():
 
     training_model = True
-    tokenize_from_scratch = False
+    tokenize_from_scratch = True
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
     val_dataset = torchtext.datasets.SST2(split = 'dev')
@@ -245,7 +245,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = torch.device("cpu")
     token_dict = {}
-    untoken_dict = {-1 : "STK", -2 : "ETK"}
+    untoken_dict = {0 : "STK", 1 : "ETK"}
 
     if tokenize_from_scratch:
         tokenized_train = []
