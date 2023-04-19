@@ -13,7 +13,7 @@ class SentimentClassifier(torch.nn.Module):
         ## only should be not trainable if weights are passed
         # self.embedding.weight = torch.nn.Parameter(embedding_weights)
         # self.embedding.weight.requires_grad = False
-
+        self.vocab_size = vocab_size
         self.encoder = torch.nn.LSTM(embedding_dim,
                                     hidden_size=512,
                                     num_layers=2,
@@ -39,6 +39,7 @@ class SentimentClassifier(torch.nn.Module):
         
         print(torch.min(x))
         print(torch.max(x))
+        print(self.vocab_size)
         x = self.embedding(x)
         #lengths = Variable(torch.LongTensor(lengths.cpu()))
         #print(x.shape)

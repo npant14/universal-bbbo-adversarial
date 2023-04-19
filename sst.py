@@ -85,8 +85,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
         total_correct = 0
         for batch in dataloader:
             inputs, labels = batch
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             
             outputs = model(inputs)
 
@@ -106,8 +106,8 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
         total_correct = 0
         for batch in dataloader:
             inputs, labels = batch
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
@@ -140,8 +140,8 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
         total_correct = 0
         for batch in dataloader:
             inputs, labels = batch
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             
             outputs = model(inputs)
             loss = loss_fn(preds, labels)
@@ -157,8 +157,8 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
         for batch in dataloader:
             #print(batch)
             inputs, labels = batch
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
@@ -236,7 +236,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 
 def main():
 
-    training_model = True
+    training_model = False
     tokenize_from_scratch = True
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
@@ -298,7 +298,7 @@ def main():
         with open('token_dicts.pkl', 'rb') as f:
             token_dict, untoken_dict = pickle.load(f)
 
-    trainloader = DataLoader(tokenized_train, batch_size = 512)
+    trainloader = DataLoader(tokenized_train, batch_size = 256)
     valloader = DataLoader(tokenized_val, batch_size=1)
     embedding_weights = None
     batch_size = 1
@@ -309,7 +309,7 @@ def main():
         with open("vocab_dump.pickle", "rb") as file:
             loaded = pickle.load(file)
             vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
-            #max_token = len(token_dict)
+    max_token = len(token_dict)+2
     print(f"vocab size = {max_token}")
     embedding_dim = 300
     model = SentimentClassifier(batch_size, max_token, embedding_dim, embedding_weights)
@@ -364,8 +364,8 @@ def main():
     ## batch size 1
     for i, batch in enumerate(valloader):
         inputs, labels = batch
-        inputs.to(device)
-        labels.to(device)
+        inputs = inputs.to(device)
+        labels = labels.to(device)
         if labels[0] == 0:
             ## append tuple of inputs labels
             positive_val_target.append((inputs, labels))
@@ -390,7 +390,7 @@ def main():
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     trigger_token_ids = [tokenizer.encode(word) for word in trigger_token_ids]
     print(trigger_token_ids)
-    return
+    
     target_label = 1
 
     # print(f"positive val loader loop size {len(positive_val_target)}")
@@ -399,8 +399,8 @@ def main():
         #print(i, len(positive_val_target))
         model.train()
         inputs, labels = batch
-        inputs.to(device)
-        labels.to(device)
+        inputs = inputs.to(device)
+        labels = labels.to(device)
 
         dummy_optimizer = optim.Adam(model.parameters())
         dummy_optimizer.zero_grad()
@@ -424,6 +424,7 @@ def main():
         ## in general (num candidates x num tokens in trigger string)
 
         # candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        print(trigger_token_ids)
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label, model, num_candidates=10)
         
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
