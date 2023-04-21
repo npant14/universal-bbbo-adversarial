@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from nltk.corpus import wordnet as wn
+from sst.py import tokenize_word
 
 def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1):
 
@@ -20,7 +21,7 @@ def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1
 def bigramtokens(adv_token_ids):
     pass
 
-def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, model, num_candidates=1):
+def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label, model, num_candidates=1):
     ## adv_token_ids shape: 10, (list)
     ## returns 10x10 numpy array 
 
@@ -61,7 +62,8 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, model, num_can
     worst_index = torch.argmin(outputs[:,adversarial_label])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
     worst_word_tokenized = adv_token_ids[worst_index]
-    worst_word = tokenizer.decode([100,worst_word_tokenized,101]).split(" ",1)[1].rsplit(" ", 1)[0]
+    # worst_word = tokenizer.decode([100,worst_word_tokenized,101]).split(" ",1)[1].rsplit(" ", 1)[0]
+    worst_word = untoken_dict[worst_word_tokenized]
     #print(worst_word)
     #worst_word.replace(" ", "")
     #worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
@@ -77,7 +79,8 @@ def synattack(adv_token_ids, vocab, tokenizer, adversarial_label, model, num_can
     # print(concat_worst_word_synset)
     for cand in concat_worst_word_synset:
         #print(cand)
-        encoded_new_word = tokenizer.encode(cand)
+        # encoded_new_word = tokenizer.encode(cand)
+        encoded_new_word = tokenize_word(cand, token_dict, untoken_dict)
         if len(encoded_new_word) > 3:
             continue
         encoded_new_word = encoded_new_word[1]
