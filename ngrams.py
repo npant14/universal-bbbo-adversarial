@@ -10,8 +10,7 @@ def get_data(filename):
     nltk.download('wordnet')
     nltk.download('omw-1.4')
     df = pd.read_csv(filename)
-    words = basic_clean_ngram(''.join(str(df['text'].tolist())))
-
+    words = basic_clean_ngram(''.join(str(df['description'].tolist()[0])))
     bigrams = pd.Series(nltk.ngrams(words, 2)).value_counts()
     return bigrams
 
@@ -49,6 +48,6 @@ def basic_clean_ngram(text):
     return [wnl.lemmatize(word) for word in words if word not in stopwords]
 
 
-# tb = get_data("tweets.csv")
+tb = get_data("books_1.Best_Books_Ever.csv")
 
-# get_next_words(tb)
+get_next_words(tb)

@@ -1,7 +1,14 @@
 import torch
 import numpy as np
 from nltk.corpus import wordnet as wn
-from sst.py import tokenize_word
+
+
+def tokenize_word(word, token_dict, untoken_dict):
+    if word not in token_dict:
+        token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
+        token_dict[word] = token
+        untoken_dict[token] = word
+    return token_dict[word]
 
 def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1):
 
@@ -62,12 +69,8 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
     worst_index = torch.argmin(outputs[:,adversarial_label])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
     worst_word_tokenized = adv_token_ids[worst_index]
-    # worst_word = tokenizer.decode([100,worst_word_tokenized,101]).split(" ",1)[1].rsplit(" ", 1)[0]
     worst_word = untoken_dict[worst_word_tokenized]
-    #print(worst_word)
-    #worst_word.replace(" ", "")
-    #worst_word_synset = wn.synonyms(worst_word) # this returns list of lists
-    #concat_worst_word_synset = sum(worst_word_synset, [])
+    print(worst_word)
     synonyms = []
     for syn in wn.synsets(worst_word):
         for l in syn.lemmas():
@@ -76,21 +79,13 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
 
     ## replace worst word with each synonym 
     new_candidate_tokens = []
-    # print(concat_worst_word_synset)
+    print(concat_worst_word_synset)
     for cand in concat_worst_word_synset:
-        #print(cand)
-        # encoded_new_word = tokenizer.encode(cand)
-        encoded_new_word = tokenize_word(cand, token_dict, untoken_dict)
-        if len(encoded_new_word) > 3:
+        if (cand == worst_word):
             continue
-        encoded_new_word = encoded_new_word[1]
-        if (encoded_new_word == worst_word_tokenized.item()):
-            continue
-        #print(encoded_new_word)
-        if encoded_new_word in vocab:
+        if cand in token_dict:
+            encoded_new_word = tokenize_word(cand, token_dict, untoken_dict)
             copied_list = np.array(adv_token_ids)
-            # how does encoding single word work? I assume it's just the second index, bc you skip start token, but not sure...?
-            ## yes
             copied_list[worst_index] = encoded_new_word
             new_candidate_tokens.append(copied_list)
     ## return new candidate tokens

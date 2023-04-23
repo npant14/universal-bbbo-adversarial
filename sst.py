@@ -17,27 +17,27 @@ import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 
-def get_vocab_size(dataloader):
-    vocab = set()
-    vocab_map = {}
-    for batch in dataloader:
-        inputs, labels = batch
-        #print(inputs.shape)
-        #print(labels.shape)
-        for sequence in inputs[:,0]:
-            for word in sequence:
-                vocab.add(word.item())
-    # print(vocab)
-    vocab = list(vocab)
-    for i, word in enumerate(vocab):
-        vocab_map[word] = i
-    with open('vocab_dump.pickle', 'wb') as file:
-        pickle.dump({"vocab_len": len(vocab), "max_token": max(vocab) + 1, "vocab": vocab, "vocab_map": vocab_map}, file, protocol=pickle.HIGHEST_PROTOCOL)
-    return len(vocab), max(vocab) + 1, vocab, vocab_map
+#def get_vocab_size(dataloader):
+#    vocab = set()
+#    vocab_map = {}
+#    for batch in dataloader:
+#        inputs, labels = batch
+#        #print(inputs.shape)
+#        #print(labels.shape)
+#        for sequence in inputs[:,0]:
+#            for word in sequence:
+#                vocab.add(word.item())
+#    # print(vocab)
+#    vocab = list(vocab)
+#    for i, word in enumerate(vocab):
+#        vocab_map[word] = i
+#    with open('vocab_dump.pickle', 'wb') as file:
+#        pickle.dump({"vocab_len": len(vocab), "max_token": max(vocab) + 1, "vocab": vocab, "vocab_map": vocab_map}, file, protocol=pickle.HIGHEST_PROTOCOL)
+#    return len(vocab), max(vocab) + 1, vocab, vocab_map
     
 def initialize_tokens(initial_word, length):
     
-    tb = get_data("tweets.csv")
+    tb = get_data("books_1.Best_Books_Ever.csv")
     bigram_dict = get_next_words(tb)
     words = [initial_word]
     for i in range(1, length):
@@ -45,7 +45,7 @@ def initialize_tokens(initial_word, length):
             words.append(bigram_dict[words[-1]][0])
         else:
             random_num = random.randint(0,len(bigram_dict.keys()) - 1)
-            words.append(bigram_dict.keys()[random_num])
+            words.append(list(bigram_dict)[random_num])
     return words
 
 def tokenize_word(word, token_dict, untoken_dict):
@@ -224,7 +224,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
-    for candidate in cand_trigger_token_ids[:,index]:
+    for candidate in cand_trigger_token_ids[index]:
         triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
         loss = get_loss(model, device, [(batch[0][0], batch[1])], triggers_one_replaced)
@@ -236,7 +236,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 
 def main():
 
-    training_model = False
+    training_model = True
     tokenize_from_scratch = True
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
@@ -270,7 +270,7 @@ def main():
 
         ## also tokenize words from ngrams
 
-        tb = get_data("tweets.csv")
+        tb = get_data("books_1.Best_Books_Ever.csv")
         bigram_dict = get_next_words(tb)
         for word in bigram_dict.keys():
             tokenize_word(word, token_dict, untoken_dict)
@@ -303,12 +303,12 @@ def main():
     embedding_weights = None
     batch_size = 1
     
-    if tokenize_from_scratch:
-        vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
-    else:
-        with open("vocab_dump.pickle", "rb") as file:
-            loaded = pickle.load(file)
-            vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
+    #if tokenize_from_scratch:
+    #    vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
+    #else:
+    #    with open("vocab_dump.pickle", "rb") as file:
+    #        loaded = pickle.load(file)
+    #        vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
     max_token = len(token_dict)+2
     print(f"vocab size = {max_token}")
     embedding_dim = 300
@@ -319,7 +319,7 @@ def main():
     if training_model: 
         print("entering training loop")
         optimizer = optim.Adam(model.parameters())
-        for epoch in range(10):
+        for epoch in range(1):
             total_loss = 0
             count = 0
 
@@ -372,9 +372,9 @@ def main():
 
     ## get acc
     print("initial training accuracy")
-    print(get_accuracy(model, device, trainloader))
+    #print(get_accuracy(model, device, trainloader))
     print("initial val accuracy")
-    print(get_accuracy(model, device, positive_val_target))
+    #print(get_accuracy(model, device, positive_val_target))
 
     model.train()
 
@@ -387,8 +387,15 @@ def main():
     trigger_token_ids = initialize_tokens(initial_word, trigger_len)
     print(trigger_token_ids)
 
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    trigger_token_ids = [tokenizer.encode(word) for word in trigger_token_ids]
+    #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    trigger_token_ids = [token_dict[word] for word in trigger_token_ids]
+    print(trigger_token_ids)
+    print(type(trigger_token_ids))
+    print(len(trigger_token_ids))
+    #trigger_token_ids = trigger_token_ids[:,1:-1]
+    #for i, lst in enumerate(trigger_token_ids):
+    #    trigger_token_ids[i] = lst[1:-1]
+    #trigger_token_ids = sum(trigger_token_ids, [])
     print(trigger_token_ids)
     
     target_label = 1
@@ -409,6 +416,7 @@ def main():
         label = torch.IntTensor(target_label).to(device)
 
         extracted_grads = []
+        print(inputs)
         preds = model(inputs)
         loss = loss_fn(preds, labels)
         loss.backward()
@@ -424,9 +432,10 @@ def main():
         ## in general (num candidates x num tokens in trigger string)
 
         # candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
-        print(trigger_token_ids)
-        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, tokenizer, target_label, model, num_candidates=10)
-        
+        #print(trigger_token_ids)
+        vocab = None
+        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, token_dict, untoken_dict, target_label, model, num_candidates=10)
+        print(f"CANDIDATE TRIGGER TOKEN IDS BEFORE GETBESTCAND {candidate_trigger_token_ids}")
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
         print(f"accuracy on round {i}: {get_accuracy(model, device, positive_val_target, trigger_token_ids)}")
         # get_accuracy(model, device, positive_val_target, trigger_token_ids)
@@ -437,9 +446,9 @@ def main():
     # create the csv writer
     writer = csv.writer(f)
     # write candidate trigger tokens to the csv
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     for candidate in candidate_trigger_token_ids:
-        writer.writerow([tokenizer.decode(idx.item()) for idx in candidate])
+        writer.writerow([untoken_dict[idx.item()] for idx in candidate])
         writer.writerow([])
 
 
