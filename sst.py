@@ -437,7 +437,21 @@ def main():
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, token_dict, untoken_dict, target_label, model, num_candidates=10)
         print(f"CANDIDATE TRIGGER TOKEN IDS BEFORE GETBESTCAND {candidate_trigger_token_ids}")
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
-        print(f"accuracy on round {i}: {get_accuracy(model, device, positive_val_target, trigger_token_ids)}")
+
+        best_token_acc = get_accuracy(model, device, positive_val_target, trigger_token_ids)
+
+        print(f"accuracy on round {i}: {best_token_acc}")
+
+        ## for random reinitialization of the tokens
+        if random.uniform(0, 1) < 0.1:
+            initial_word = random.choice(list(token_dict.keys()))
+            new_random_token_ids = initialize_tokens(initial_word, trigger_len)
+            new_random_token_ids = [token_dict[word] for word in new_random_token_ids]
+            new_random_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, new_random_token_ids, beam_size=1)
+
+            if best_token_acc >= get_accuracy(model, device, positive_val_target, new_random_token_ids):
+                trigger_token_ids = new_random_token_ids
+
         # get_accuracy(model, device, positive_val_target, trigger_token_ids)
         # break
 
