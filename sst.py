@@ -442,6 +442,15 @@ def main():
 
         print(f"accuracy on round {i}: {best_token_acc}")
 
+        f = open('output_all.csv', 'a')
+        # create the csv writer
+        writer = csv.writer(f)
+        # write candidate trigger tokens to the csv
+        #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        for tti in trigger_token_ids:
+            writer.writerow([untoken_dict[idx.item()] for idx in tti] + [str(best_token_acc)])
+            writer.writerow([])
+
         ## for random reinitialization of the tokens
         if random.uniform(0, 1) < 0.1:
             initial_word = random.choice(list(token_dict.keys()))
