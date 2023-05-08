@@ -190,13 +190,14 @@ def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_to
     ## maintain a heapq
 
     ## run on index 0 for candidates
+    #print(cand_trigger_token_ids)
     loss_per_candidate = get_loss_per_candidate(0, model, batch, trigger_token_ids,
                                                 cand_trigger_token_ids, device)
 
     ## this is a list that is (beam size) long sorted by maximum loss
     top_candidates = heapq.nlargest(beam_size, loss_per_candidate, key=itemgetter(1))
     ## for len trigger tokens (1-end)
-    for idx in range(1, len(trigger_token_ids)):
+    for idx in range(1, len(cand_trigger_token_ids)):
         loss_per_candidate = []
     ##  for everything in the heapq
         for candidate, cand_loss in top_candidates:
@@ -447,10 +448,8 @@ def main():
         writer = csv.writer(f)
         # write candidate trigger tokens to the csv
         #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        for tti in trigger_token_ids:
-            writer.writerow([untoken_dict[idx.item()] for idx in tti] + [str(best_token_acc)])
-            writer.writerow([])
-
+        writer.writerow([untoken_dict[idx.item()] for idx in trigger_token_ids] + [str(best_token_acc)])
+        writer.writerow([])
         ## for random reinitialization of the tokens
         if random.uniform(0, 1) < 0.1:
             initial_word = random.choice(list(token_dict.keys()))

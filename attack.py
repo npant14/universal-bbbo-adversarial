@@ -45,7 +45,7 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
         ##  run model on new sentence padded to 512
         padded_sentence = np.pad(copied_list, (0, 512 - len(adv_token_ids)), 'constant')
         mask = torch.zeros(512, dtype=torch.int64)
-        mask[0:10] = 1
+        mask[0:len(adv_token_ids)] = 1
         mask[i] = 0
         torch_padded_sentence =  torch.from_numpy(padded_sentence).to(dtype=torch.long)
         #inputs = torch.tensor([torch_padded_sentence, mask])
