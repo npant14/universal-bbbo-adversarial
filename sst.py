@@ -174,6 +174,8 @@ def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_to
     per word), it finds the best new candidate trigger.
     This performs beam search in a left to right fashion.
     """
+    # trigger_token_ids = current trigger_token_ids
+    # cand_trigger_token_ids = 10x10 matrix of future ids
     ## maintain a heapq
 
     ## run on index 0 for candidates
@@ -184,7 +186,7 @@ def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_to
     ## this is a list that is (beam size) long sorted by maximum loss
     top_candidates = heapq.nlargest(beam_size, loss_per_candidate, key=itemgetter(1))
     ## for len trigger tokens (1-end)
-    for idx in range(1, len(cand_trigger_token_ids)):
+    for idx in range(1, len(trigger_token_ids)):
         loss_per_candidate = []
     ##  for everything in the heapq
         for candidate, cand_loss in top_candidates:
@@ -208,7 +210,8 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
-    for candidate in cand_trigger_token_ids[index]:
+    
+    for candidate in [c[index] for c in cand_trigger_token_ids]: ##]cand_trigger_token_ids[:,index]:
         triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
         loss = get_loss(model, device, [(batch[0][0], batch[1])], triggers_one_replaced)
@@ -402,7 +405,7 @@ def main():
         # create the csv writer
         writer = csv.writer(f)
         # write candidate trigger tokens to the csv
-        writer.writerow([untoken_dict[idx.item()] for idx in trigger_token_ids] + [str(best_token_acc)])
+        writer.writerow([untoken_dict[idx] for idx in trigger_token_ids] + [str(best_token_acc)])
         writer.writerow([])
         ## for random reinitialization of the tokens
         if random.uniform(0, 1) < 0.1:

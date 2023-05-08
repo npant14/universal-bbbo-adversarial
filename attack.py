@@ -1,7 +1,8 @@
 import torch
+import random
 import numpy as np
 from nltk.corpus import wordnet as wn
-from preprocess import tokenize_word
+from preprocess import tokenize_word, initialize_tokens
 
 
 # ## this function is also defined in sst.py but is not imported from there due to 
@@ -76,7 +77,15 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
         for l in syn.lemmas():
             synonyms.append(l.name())
     concat_worst_word_synset = set(synonyms)
-
+    
+    
+    if len(concat_worst_word_synset) == 0:
+        print("reinitializing in attack.py :) have a great day !")
+        new_cand_tokens = []
+        for i in range(5):
+            initial_word = random.choice(list(token_dict.keys()))
+            new_cand_tokens.append(initialize_tokens(initial_word, 5))
+        return np.array(new_cand_tokens)
     ## replace worst word with each synonym 
     new_candidate_tokens = []
     print(concat_worst_word_synset)
