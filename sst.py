@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader, Dataset, TensorDataset
 from torch import optim
 import torch
 import numpy as np
-from attack import hotflip, synattack
+from attack import run_hotflip_attack, synattack
 import pickle
 import csv
 import random
@@ -389,35 +389,36 @@ def main():
 
     for i, batch in enumerate(positive_val_target):
         #print(i, len(positive_val_target))
-        model.train()
-        inputs, labels = batch
-        inputs = inputs.to(device)
-        labels = labels.to(device)
+        # model.train()
+        # inputs, labels = batch
+        # inputs = inputs.to(device)
+        # labels = labels.to(device)
 
-        dummy_optimizer = optim.Adam(model.parameters())
-        dummy_optimizer.zero_grad()
+        # dummy_optimizer = optim.Adam(model.parameters())
+        # dummy_optimizer.zero_grad()
 
-        original_labels = labels[0].clone().to(device)
-        label = torch.IntTensor(target_label).to(device)
+        # original_labels = labels[0].clone().to(device)
+        # label = torch.IntTensor(target_label).to(device)
 
-        extracted_grads = []
-        print(inputs)
-        preds = model(inputs)
-        loss = loss_fn(preds, labels)
-        loss.backward()
+        # extracted_grads = []
+        # print(inputs)
+        # preds = model(inputs)
+        # loss = loss_fn(preds, labels)
+        # loss.backward()
 
-        grads = extracted_grads[0].to(device)
+        # grads = extracted_grads[0].to(device)
 
-        label = original_labels.to(device)
-        average_grad = torch.sum(grads, dim=0).to(device)
-        average_grad = average_grad[0:len(trigger_token_ids)]
+        # label = original_labels.to(device)
+        # average_grad = torch.sum(grads, dim=0).to(device)
+        # average_grad = average_grad[0:len(trigger_token_ids)]
 
         ## want to replace this 
         ## 10x10 matrix
         ## in general (num candidates x num tokens in trigger string)
 
-        # candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+        # candidate_trigger_token_ids = run_hotflip_attack(model, batch, device, loss_fn, embedding_matrix)
         #print(trigger_token_ids)
+        ## 
         vocab = None
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, token_dict, untoken_dict, target_label, model, num_candidates=10)
         print(f"CANDIDATE TRIGGER TOKEN IDS BEFORE GETBESTCAND {candidate_trigger_token_ids}")

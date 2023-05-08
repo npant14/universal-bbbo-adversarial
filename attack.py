@@ -92,3 +92,33 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
     ## this is going to return < 10 
     #return new_candidate_tokens.detach().to(device).cpu().numpy()
     return np.array(new_candidate_tokens)
+
+
+def run_hotflip_attack(model, batch, device, loss_fn, embedding_matrix):
+    model.train()
+    inputs, labels = batch
+    inputs = inputs.to(device)
+    labels = labels.to(device)
+
+    dummy_optimizer = optim.Adam(model.parameters())
+    dummy_optimizer.zero_grad()
+
+    original_labels = labels[0].clone().to(device)
+    label = torch.IntTensor(target_label).to(device)
+
+    extracted_grads = []
+    print(inputs)
+    preds = model(inputs)
+    loss = loss_fn(preds, labels)
+    loss.backward()
+
+    grads = extracted_grads[0].to(device)
+
+    label = original_labels.to(device)
+    average_grad = torch.sum(grads, dim=0).to(device)
+    average_grad = average_grad[0:len(trigger_token_ids)]
+
+    candidate_trigger_token_ids = hotflip(average_grad, embedding_matrix, trigger_token_ids, num_candidates=10)
+
+    return candidate_trigger_token_ids
+
