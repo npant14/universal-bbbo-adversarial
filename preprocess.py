@@ -4,6 +4,7 @@ import unicodedata
 import nltk
 from nltk.corpus import stopwords
 import matplotlib.pyplot as plt
+import torch
 
 def get_data(filename):
     nltk.download('stopwords')
@@ -25,8 +26,6 @@ def get_next_words(bigrams_series):
         else:
             word_pairs[row[0][0]] = [row[0][1]]
 
-
-    #print(word_pairs)
     return word_pairs
 
 def basic_clean(text):
@@ -36,8 +35,6 @@ def basic_clean(text):
 
     words = re.sub(r'[^\w\s]', '', text).split()
     return words
-    #return [word for word in words if word not in stopwords]
-    #return [wnl.lemmatize(word) for word in words if word not in stopwords]
 
 def basic_clean_ngram(text):
     wnl = nltk.stem.WordNetLemmatizer()
@@ -47,6 +44,37 @@ def basic_clean_ngram(text):
     words = re.sub(r'[^\w\s]', '', text).split()
     return [wnl.lemmatize(word) for word in words if word not in stopwords]
 
+
+def tokenize_word(word, token_dict, untoken_dict):
+    if word not in token_dict:
+        token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
+        token_dict[word] = token
+        untoken_dict[token] = word
+    return token_dict[word]
+
+def tokenizing_sst2(sentence, token_dict, untoken_dict):
+    input_ids = []
+    attention_mask = []
+    ## basic_clean removes punctuation and casing
+    sentence = basic_clean(sentence)
+
+    ## 0 is start token
+    tokenized_sentence = [0]
+    
+    for word in sentence:
+        token = tokenize_word(word, token_dict, untoken_dict)
+        tokenized_sentence.append(token)
+
+    ## 1 is stop token
+    tokenized_sentence.append(1)
+
+    ## pad sentence with 0s to len 512
+    tokenized_sentence  = tokenized_sentence +  [0] * (512 - len(tokenized_sentence))
+    ## create attention mask
+    attention_mask = [1] * (len(tokenized_sentence)) + [0] * (512 - len(tokenized_sentence))
+
+    return torch.stack([torch.tensor(tokenized_sentence),
+                        torch.tensor(attention_mask)], dim=0)
 
 tb = get_data("books_1.Best_Books_Ever.csv")
 

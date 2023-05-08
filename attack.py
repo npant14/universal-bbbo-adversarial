@@ -1,14 +1,17 @@
 import torch
 import numpy as np
 from nltk.corpus import wordnet as wn
+from preprocess import tokenize_word
 
 
-def tokenize_word(word, token_dict, untoken_dict):
-    if word not in token_dict:
-        token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
-        token_dict[word] = token
-        untoken_dict[token] = word
-    return token_dict[word]
+# ## this function is also defined in sst.py but is not imported from there due to 
+# ## an issue with cyclic imports
+# def tokenize_word(word, token_dict, untoken_dict):
+#     if word not in token_dict:
+#         token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
+#         token_dict[word] = token
+#         untoken_dict[token] = word
+#     return token_dict[word]
 
 def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1):
 
@@ -24,9 +27,6 @@ def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1
         return best_k_ids.detach().to(device).cpu().numpy()[0]
     _, best_at_step = grad_embedding.max(2)
     return best_at_step[0].detach().to(device).cpu().numpy()
-    
-def bigramtokens(adv_token_ids):
-    pass
 
 def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label, model, num_candidates=1):
     ## adv_token_ids shape: 10, (list)

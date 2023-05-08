@@ -1,5 +1,5 @@
 from models import SentimentClassifier
-from ngrams import basic_clean, get_data, get_next_words
+from preprocess import basic_clean, get_data, get_next_words, tokenize_word, tokenizing_sst2
 from operator import itemgetter
 import heapq
 from copy import deepcopy
@@ -7,7 +7,6 @@ import torchtext
 from torch.utils.data import DataLoader, Dataset, TensorDataset
 from torch import optim
 import torch
-from transformers import BertTokenizer
 import numpy as np
 from attack import hotflip, synattack
 import pickle
@@ -15,30 +14,15 @@ import csv
 import random
 import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-
-
-#def get_vocab_size(dataloader):
-#    vocab = set()
-#    vocab_map = {}
-#    for batch in dataloader:
-#        inputs, labels = batch
-#        #print(inputs.shape)
-#        #print(labels.shape)
-#        for sequence in inputs[:,0]:
-#            for word in sequence:
-#                vocab.add(word.item())
-#    # print(vocab)
-#    vocab = list(vocab)
-#    for i, word in enumerate(vocab):
-#        vocab_map[word] = i
-#    with open('vocab_dump.pickle', 'wb') as file:
-#        pickle.dump({"vocab_len": len(vocab), "max_token": max(vocab) + 1, "vocab": vocab, "vocab_map": vocab_map}, file, protocol=pickle.HIGHEST_PROTOCOL)
-#    return len(vocab), max(vocab) + 1, vocab, vocab_map
     
 def initialize_tokens(initial_word, length):
+    """
+    function to initialize a trigger token sequence of length length from initial_word
+    """
     
     tb = get_data("books_1.Best_Books_Ever.csv")
     bigram_dict = get_next_words(tb)
+    ## words is the list to return
     words = [initial_word]
     for i in range(1, length):
         if words[-1] in bigram_dict:
@@ -48,33 +32,36 @@ def initialize_tokens(initial_word, length):
             words.append(list(bigram_dict)[random_num])
     return words
 
-def tokenize_word(word, token_dict, untoken_dict):
-    if word not in token_dict:
-        token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
-        token_dict[word] = token
-        untoken_dict[token] = word
-    return token_dict[word]
+# def tokenize_word(word, token_dict, untoken_dict):
+#     if word not in token_dict:
+#         token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
+#         token_dict[word] = token
+#         untoken_dict[token] = word
+#     return token_dict[word]
 
-def tokenizing_sst2(sentence, token_dict, untoken_dict):
-    input_ids = []
-    attention_mask = []
-    #print(sentence)
-    sentence = basic_clean(sentence)
-    #print(sentence)
-    # tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+# def tokenizing_sst2(sentence, token_dict, untoken_dict):
+#     input_ids = []
+#     attention_mask = []
+#     ## basic_clean removes punctuation and casing
+#     sentence = basic_clean(sentence)
 
-    tokenized_sentence = [0]
+#     ## 0 is start token
+#     tokenized_sentence = [0]
     
-    for word in sentence:
-        token = tokenize_word(word, token_dict, untoken_dict)
-        tokenized_sentence.append(token)
+#     for word in sentence:
+#         token = tokenize_word(word, token_dict, untoken_dict)
+#         tokenized_sentence.append(token)
 
-    tokenized_sentence.append(1)
-    tokenized_sentence  = tokenized_sentence +  [0] * (512 - len(tokenized_sentence))
-    attention_mask = [1] * (len(tokenized_sentence)) + [0] * (512 - len(tokenized_sentence))
+#     ## 1 is stop token
+#     tokenized_sentence.append(1)
 
-    return torch.stack([torch.tensor(tokenized_sentence),
-                        torch.tensor(attention_mask)], dim=0)
+#     ## pad sentence with 0s to len 512
+#     tokenized_sentence  = tokenized_sentence +  [0] * (512 - len(tokenized_sentence))
+#     ## create attention mask
+#     attention_mask = [1] * (len(tokenized_sentence)) + [0] * (512 - len(tokenized_sentence))
+
+#     return torch.stack([torch.tensor(tokenized_sentence),
+#                         torch.tensor(attention_mask)], dim=0)
     
 
 def get_accuracy(model, device, dataloader, trigger_token_ids=None):
@@ -217,10 +204,6 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     ## evaluate loss on current set of best trigger token ids
     loss_per_candidate = []
 
-    # get_loss(model, device, dataloader, trigger_token_ids=None):
-    #print(batch[0][0].shape)
-    #print(batch[1])
-
     cur_loss = get_loss(model, device, [(batch[0][0], batch[1])], trigger_token_ids)
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
@@ -244,16 +227,18 @@ def main():
     val_dataset = torchtext.datasets.SST2(split = 'dev')
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = torch.device("cpu")
+
     token_dict = {}
     untoken_dict = {0 : "STK", 1 : "ETK"}
 
+    ##### begin tokenization
     if tokenize_from_scratch:
         tokenized_train = []
-        for i,s in enumerate(train_dataset):
-            # now has both sequence and mask
+        for i,sequence in enumerate(train_dataset):
+            # each sequence has a sentence and an label
             print(i)
-            tokenized_train.append((tokenizing_sst2(s[0], token_dict, untoken_dict), s[1]))
+            ## once tokenized, the sqeuence has a tokenized sentence and an attention mask
+            tokenized_train.append((tokenizing_sst2(sequence[0], token_dict, untoken_dict), sequence[1]))
 
 
         tokenized = torch.cat(list(zip(*tokenized_train))[0])
@@ -270,7 +255,6 @@ def main():
         np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
 
         ## also tokenize words from ngrams
-
         tb = get_data("books_1.Best_Books_Ever.csv")
         bigram_dict = get_next_words(tb)
         for word in bigram_dict.keys():
@@ -288,35 +272,40 @@ def main():
         training_data = np.load("tokenized_train.npy")
         training_labels = np.load("train_labels.npy")
         for i in range(training_labels.shape[0]):
-            tokenized_train.append((torch.tensor(training_data[i*2:2*(i+1)]).to(device), torch.tensor(training_labels[i]).to(device)))
+            ## append to dataset in the form ([sequence, mask], label)
+            sequence = torch.tensor(training_data[i*2:2*(i+1)]).to(device)
+            label = torch.tensor(training_labels[i]).to(device)
+
+            tokenized_train.append((sequence, label))
 
         tokenized_val = []
         val_data = np.load("tokenized_val.npy")
         val_labels = np.load("val_labels.npy")
         for i in range(val_labels.shape[0]):
-            tokenized_val.append((torch.tensor(val_data[i*2:2*(i+1)]).to(device), torch.tensor(val_labels[i]).to(device)))
+            ## append to dataset in the form ([sequence, mask], label)
+            sequence = torch.tensor(training_data[i*2:2*(i+1)]).to(device)
+            label = torch.tensor(training_labels[i]).to(device)
+
+            tokenized_val.append((sequence, label))
         
         with open('token_dicts.pkl', 'rb') as f:
             token_dict, untoken_dict = pickle.load(f)
+    ##### end tokenization
+
 
     trainloader = DataLoader(tokenized_train, batch_size = 256)
     valloader = DataLoader(tokenized_val, batch_size=1)
     embedding_weights = None
     batch_size = 1
     
-    #if tokenize_from_scratch:
-    #    vocab_size, max_token, vocab, vocab_map = get_vocab_size(trainloader) 
-    #else:
-    #    with open("vocab_dump.pickle", "rb") as file:
-    #        loaded = pickle.load(file)
-    #        vocab_size, max_token, vocab, vocab_map = loaded["vocab_len"], loaded["max_token"], loaded["vocab"], loaded["vocab_map"]
-    max_token = len(token_dict)+2
+    max_token = len(token_dict) + 2 ## +2 to account for start and stop tokens
     print(f"vocab size = {max_token}")
     embedding_dim = 300
     model = SentimentClassifier(batch_size, max_token, embedding_dim, embedding_weights)
     model.to(device)
     loss_fn = torch.nn.CrossEntropyLoss()
 
+    #### begin getting trained model
     if training_model: 
         print("entering training loop")
         optimizer = optim.Adam(model.parameters())
@@ -344,7 +333,8 @@ def main():
             torch.save(model.state_dict(), "weights.h5")
     else:
         model.load_state_dict(torch.load("weights.h5",map_location=device))
-    
+    ##### end getting trained model
+
     model.eval()
 
     extracted_grads = []
@@ -379,16 +369,12 @@ def main():
 
     model.train()
 
-    ## TODO: initialize which trigger token IDs to use
-
     ## start with 10 random words here (not just always racist)
-    #trigger_token_ids = [tokenizing_sst2("black")[0][1]] * 10
     initial_word = "black"
     trigger_len = 5
     trigger_token_ids = initialize_tokens(initial_word, trigger_len)
     print(trigger_token_ids)
 
-    #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     trigger_token_ids = [token_dict[word] for word in trigger_token_ids]
     print(trigger_token_ids)
     print(type(trigger_token_ids))
@@ -400,8 +386,6 @@ def main():
     print(trigger_token_ids)
     
     target_label = 1
-
-    # print(f"positive val loader loop size {len(positive_val_target)}")
 
     for i, batch in enumerate(positive_val_target):
         #print(i, len(positive_val_target))
@@ -447,7 +431,6 @@ def main():
         # create the csv writer
         writer = csv.writer(f)
         # write candidate trigger tokens to the csv
-        #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         writer.writerow([untoken_dict[idx.item()] for idx in trigger_token_ids] + [str(best_token_acc)])
         writer.writerow([])
         ## for random reinitialization of the tokens
@@ -468,7 +451,6 @@ def main():
     # create the csv writer
     writer = csv.writer(f)
     # write candidate trigger tokens to the csv
-    #tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     for candidate in candidate_trigger_token_ids:
         writer.writerow([untoken_dict[idx.item()] for idx in candidate])
         writer.writerow([])
