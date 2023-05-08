@@ -1,5 +1,5 @@
 from models import SentimentClassifier
-from preprocess import basic_clean, get_data, get_next_words, tokenize_word, tokenizing_sst2
+from preprocess import basic_clean, get_data, get_next_words, tokenize_word, tokenizing_sst2, initialize_tokens
 from operator import itemgetter
 import heapq
 from copy import deepcopy
@@ -15,22 +15,22 @@ import random
 import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     
-def initialize_tokens(initial_word, length):
-    """
-    function to initialize a trigger token sequence of length length from initial_word
-    """
+# def initialize_tokens(initial_word, length):
+#     """
+#     function to initialize a trigger token sequence of length length from initial_word
+#     """
     
-    tb = get_data("books_1.Best_Books_Ever.csv")
-    bigram_dict = get_next_words(tb)
-    ## words is the list to return
-    words = [initial_word]
-    for i in range(1, length):
-        if words[-1] in bigram_dict:
-            words.append(bigram_dict[words[-1]][0])
-        else:
-            random_num = random.randint(0,len(bigram_dict.keys()) - 1)
-            words.append(list(bigram_dict)[random_num])
-    return words
+#     tb = get_data("books_1.Best_Books_Ever.csv")
+#     bigram_dict = get_next_words(tb)
+#     ## words is the list to return
+#     words = [initial_word]
+#     for i in range(1, length):
+#         if words[-1] in bigram_dict:
+#             words.append(bigram_dict[words[-1]][0])
+#         else:
+#             random_num = random.randint(0,len(bigram_dict.keys()) - 1)
+#             words.append(list(bigram_dict)[random_num])
+#     return words
 
 # def tokenize_word(word, token_dict, untoken_dict):
 #     if word not in token_dict:
@@ -388,37 +388,7 @@ def main():
     target_label = 1
 
     for i, batch in enumerate(positive_val_target):
-        #print(i, len(positive_val_target))
-        # model.train()
-        # inputs, labels = batch
-        # inputs = inputs.to(device)
-        # labels = labels.to(device)
-
-        # dummy_optimizer = optim.Adam(model.parameters())
-        # dummy_optimizer.zero_grad()
-
-        # original_labels = labels[0].clone().to(device)
-        # label = torch.IntTensor(target_label).to(device)
-
-        # extracted_grads = []
-        # print(inputs)
-        # preds = model(inputs)
-        # loss = loss_fn(preds, labels)
-        # loss.backward()
-
-        # grads = extracted_grads[0].to(device)
-
-        # label = original_labels.to(device)
-        # average_grad = torch.sum(grads, dim=0).to(device)
-        # average_grad = average_grad[0:len(trigger_token_ids)]
-
-        ## want to replace this 
-        ## 10x10 matrix
-        ## in general (num candidates x num tokens in trigger string)
-
         # candidate_trigger_token_ids = run_hotflip_attack(model, batch, device, loss_fn, embedding_matrix)
-        #print(trigger_token_ids)
-        ## 
         vocab = None
         candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, token_dict, untoken_dict, target_label, model, num_candidates=10)
         print(f"CANDIDATE TRIGGER TOKEN IDS BEFORE GETBESTCAND {candidate_trigger_token_ids}")

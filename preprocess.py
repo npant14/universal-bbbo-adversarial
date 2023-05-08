@@ -44,7 +44,6 @@ def basic_clean_ngram(text):
     words = re.sub(r'[^\w\s]', '', text).split()
     return [wnl.lemmatize(word) for word in words if word not in stopwords]
 
-
 def tokenize_word(word, token_dict, untoken_dict):
     if word not in token_dict:
         token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
@@ -75,6 +74,23 @@ def tokenizing_sst2(sentence, token_dict, untoken_dict):
 
     return torch.stack([torch.tensor(tokenized_sentence),
                         torch.tensor(attention_mask)], dim=0)
+
+def initialize_tokens(initial_word, length):
+    """
+    function to initialize a trigger token sequence of length length from initial_word
+    """
+    
+    tb = get_data("books_1.Best_Books_Ever.csv")
+    bigram_dict = get_next_words(tb)
+    ## words is the list to return
+    words = [initial_word]
+    for i in range(1, length):
+        if words[-1] in bigram_dict:
+            words.append(bigram_dict[words[-1]][0])
+        else:
+            random_num = random.randint(0,len(bigram_dict.keys()) - 1)
+            words.append(list(bigram_dict)[random_num])
+    return words
 
 tb = get_data("books_1.Best_Books_Ever.csv")
 
