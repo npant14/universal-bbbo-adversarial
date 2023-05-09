@@ -98,10 +98,17 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
             
             trigger_sequence_tensor = torch.tensor(trigger_token_ids, dtype=torch.int64)
             trigger_sequence_tensor = trigger_sequence_tensor.repeat(len(batch) - 1, 1).to(device)
-            # print(trigger_sequence_tensor.shape)
-            # print(inputs[:,0].shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
-            altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
+            ## figure out how many 1s needed to add to start of mask
+            ## len(trigger_token_ids) assumes that trigger_token_ids is a python list
+            ## assuming trigger_token_ids is 1xn
+            add_to_mask = torch.tensor([1] * len(trigger_token_ids))
+            ## below line is same dealio as above with repeating the sequence to easily prepend to batch
+            add_to_mask = add_to_mask.repeat(len(batch) - 1, 1).to(device)
+            ## prepend 1s to mask, truncate to length 512
+            altered_masks= torch.cat((add_to_mask, inputs[:,1]), 1)[:,:512]
+            
+            altered_inputs = torch.stack((altered_sequences, altered_masks), dim=1)
             outputs = model(altered_inputs)
 
             # Total number of labels
@@ -155,7 +162,16 @@ def get_loss(model, device, dataloader, trigger_token_ids=None):
             #print(inputs.shape)
             #print(trigger_sequence_tensor.shape)
             altered_sequences = torch.cat((trigger_sequence_tensor, inputs[:,0]), 1)[:,:512]
-            altered_inputs = torch.stack((altered_sequences, inputs[:,1]), dim=1)
+            ## figure out how many 1s needed to add to start of mask
+            ## len(trigger_token_ids) assumes that trigger_token_ids is a python list
+            ## assuming trigger_token_ids is 1xn
+            add_to_mask = torch.tensor([1] * len(trigger_token_ids))
+            ## below line is same dealio as above with repeating the sequence to easily prepend to batch
+            add_to_mask = add_to_mask.repeat(len(batch) - 1, 1).to(device)
+            ## prepend 1s to mask, truncate to length 512
+            altered_masks= torch.cat((add_to_mask, inputs[:,1]), 1)[:,:512]
+            
+            altered_inputs = torch.stack((altered_sequences, altered_masks), dim=1)
             outputs = model(altered_inputs)
             loss = loss_fn(outputs, labels)
 
