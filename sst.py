@@ -210,7 +210,10 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
-    
+    if cand_trigger_token_ids.ndim < 2:
+        print("FLAG HERE")
+        cand_trigger_token_ids = np.reshape(cand_trigger_token_ids, (1,-1))
+        print(cand_trigger_token_ids)
     for candidate in [c[index] for c in cand_trigger_token_ids]: ##]cand_trigger_token_ids[:,index]:
         triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
@@ -412,6 +415,8 @@ def main():
             initial_word = random.choice(list(token_dict.keys()))
             new_random_token_ids = initialize_tokens(initial_word, trigger_len)
             new_random_token_ids = [token_dict[word] for word in new_random_token_ids]
+            new_random_token_ids = np.array(new_random_token_ids)
+            new_random_token_ids = np.reshape(new_random_token_ids, (1,-1))
             new_random_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, new_random_token_ids, beam_size=1)
 
             if best_token_acc >= get_accuracy(model, device, positive_val_target, new_random_token_ids):
