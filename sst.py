@@ -1,5 +1,5 @@
 from models import SentimentClassifier
-from preprocess import basic_clean, get_data, get_next_words, tokenize_word, tokenizing_sst2, initialize_tokens
+from preprocess import basic_clean, get_data, get_next_words, tokenize_word, tokenizing_sst2, initialize_trigger_words
 from operator import itemgetter
 import heapq
 from copy import deepcopy
@@ -14,57 +14,17 @@ import csv
 import random
 import os
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
-    
-# def initialize_tokens(initial_word, length):
-#     """
-#     function to initialize a trigger token sequence of length length from initial_word
-#     """
-    
-#     tb = get_data("books_1.Best_Books_Ever.csv")
-#     bigram_dict = get_next_words(tb)
-#     ## words is the list to return
-#     words = [initial_word]
-#     for i in range(1, length):
-#         if words[-1] in bigram_dict:
-#             words.append(bigram_dict[words[-1]][0])
-#         else:
-#             random_num = random.randint(0,len(bigram_dict.keys()) - 1)
-#             words.append(list(bigram_dict)[random_num])
-#     return words
-
-# def tokenize_word(word, token_dict, untoken_dict):
-#     if word not in token_dict:
-#         token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
-#         token_dict[word] = token
-#         untoken_dict[token] = word
-#     return token_dict[word]
-
-# def tokenizing_sst2(sentence, token_dict, untoken_dict):
-#     input_ids = []
-#     attention_mask = []
-#     ## basic_clean removes punctuation and casing
-#     sentence = basic_clean(sentence)
-
-#     ## 0 is start token
-#     tokenized_sentence = [0]
-    
-#     for word in sentence:
-#         token = tokenize_word(word, token_dict, untoken_dict)
-#         tokenized_sentence.append(token)
-
-#     ## 1 is stop token
-#     tokenized_sentence.append(1)
-
-#     ## pad sentence with 0s to len 512
-#     tokenized_sentence  = tokenized_sentence +  [0] * (512 - len(tokenized_sentence))
-#     ## create attention mask
-#     attention_mask = [1] * (len(tokenized_sentence)) + [0] * (512 - len(tokenized_sentence))
-
-#     return torch.stack([torch.tensor(tokenized_sentence),
-#                         torch.tensor(attention_mask)], dim=0)
-    
+        
 
 def get_accuracy(model, device, dataloader, trigger_token_ids=None):
+    """
+    model: trained model
+    device: cuda device
+    dataloader : an iterable of tuples with form (input, label)
+    trigger_token_ids : a len n list of token ids
+
+    return : double (percentage accuracy)
+    """
     model.eval()
     #import pdb
     #pdb.set_trace()
@@ -126,6 +86,15 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
     return acc
 
 def get_loss(model, device, dataloader, trigger_token_ids=None):
+    """
+    model: trained model
+    device: cuda device
+    dataloader : an iterable of tuples with form (input, label)
+    trigger_token_ids : a len n list of token ids
+
+    return : double (loss)
+    """
+
     model.eval()
     loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -189,9 +158,12 @@ def get_best_candidates(model, batch, device, trigger_token_ids, cand_trigger_to
     Given the list of candidate trigger token ids (of number of trigger words by number of candidates
     per word), it finds the best new candidate trigger.
     This performs beam search in a left to right fashion.
+
+    trigger_token_ids : len n list of tokens (current "best")
+    cand_trigger_token_ids = (num candidates, len trigger) np.array of future possible ids
+
+    return: len n list of trigger tokens (new best) 
     """
-    # trigger_token_ids = current trigger_token_ids
-    # cand_trigger_token_ids = 10x10 matrix of future ids
     ## maintain a heapq
 
     ## run on index 0 for candidates
@@ -218,6 +190,12 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     """
     For a particular index, the function tries all of the candidate tokens for that index.
     The function returns a list containing the candidate triggers it tried, along with their loss.
+
+    trigger_token_ids : len n list of tokens (current "best")
+    cand_trigger_token_ids = (num candidates, len trigger) np.array of future possible ids
+
+    return: list(tuple(list of tokens, loss)) 
+    
     """
     ## evaluate loss on current set of best trigger token ids
     loss_per_candidate = []
@@ -226,11 +204,13 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     loss_per_candidate.append((deepcopy(trigger_token_ids), cur_loss))
 
     ## iterate through set of candidate tokens at that index replacing one at a time, at index, and save loss
+
+    ## TODO: with the fix on types, can we get rid of this condition
     if cand_trigger_token_ids.ndim < 2:
         print("FLAG HERE")
         cand_trigger_token_ids = np.reshape(cand_trigger_token_ids, (1,-1))
         print(cand_trigger_token_ids)
-    for candidate in [c[index] for c in cand_trigger_token_ids]: ##]cand_trigger_token_ids[:,index]:
+    for candidate in [c[index] for c in cand_trigger_token_ids]:
         triggers_one_replaced = deepcopy(trigger_token_ids)
         triggers_one_replaced[index] = candidate
         loss = get_loss(model, device, [(batch[0][0], batch[1])], triggers_one_replaced)
@@ -240,20 +220,13 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
     ## list(tuple(list of tokens, loss)) 
     return loss_per_candidate
 
-def main():
+def tokenize_datasets(device, train_data, val_data, token_dict, untoken_dict, tokenize_from_scratch):
+    """
 
-    training_model = False
-    tokenize_from_scratch = True
+    return tuple: tokenized_train, tokenized_val
 
-    train_dataset = torchtext.datasets.SST2(split = 'train')
-    val_dataset = torchtext.datasets.SST2(split = 'dev')
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    token_dict = {}
-    untoken_dict = {0 : "STK", 1 : "ETK"}
-
-    ##### begin tokenization
+    """
     if tokenize_from_scratch:
         tokenized_train = []
         for i,sequence in enumerate(train_dataset):
@@ -312,6 +285,85 @@ def main():
         
         with open('token_dicts.pkl', 'rb') as f:
             token_dict, untoken_dict = pickle.load(f)
+
+    return tokenized_train, tokenized_val
+
+def main():
+
+    training_model = False
+    tokenize_from_scratch = True
+
+    train_dataset = torchtext.datasets.SST2(split = 'train')
+    val_dataset = torchtext.datasets.SST2(split = 'dev')
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    token_dict = {}
+    untoken_dict = {0 : "STK", 1 : "ETK"}
+
+    tokenized_train, tokenized_val = tokenize_datasets(device, train_dataset, val_dataset, \
+                                                        token_dict, untoken_dict, tokenize_from_scratch)
+
+    ##### begin tokenization
+    ## TODO: Check if abstraction works okay 
+    # if tokenize_from_scratch:
+    #     tokenized_train = []
+    #     for i,sequence in enumerate(train_dataset):
+    #         # each sequence has a sentence and an label
+    #         print(i)
+    #         ## once tokenized, the sqeuence has a tokenized sentence and an attention mask
+    #         tokenized_train.append((tokenizing_sst2(sequence[0], token_dict, untoken_dict), sequence[1]))
+
+
+    #     tokenized = torch.cat(list(zip(*tokenized_train))[0])
+    #     np.save("tokenized_train.npy", np.asarray(tokenized))
+    #     np.save("train_labels.npy", np.asarray(list(list(zip(*tokenized_train))[1])))
+
+
+    #     tokenized_val = []
+    #     for i, s in enumerate(val_dataset):
+    #     #    print(i)
+    #        tokenized_val.append((tokenizing_sst2(s[0], token_dict, untoken_dict), s[1]))
+    #     tokenized = torch.cat(list(zip(*tokenized_val))[0])
+    #     np.save("tokenized_val.npy", np.asarray(tokenized))
+    #     np.save("val_labels.npy", np.asarray(list(list(zip(*tokenized_val))[1])))
+
+    #     ## also tokenize words from ngrams
+    #     tb = get_data("books_1.Best_Books_Ever.csv")
+    #     bigram_dict = get_next_words(tb)
+    #     for word in bigram_dict.keys():
+    #         tokenize_word(word, token_dict, untoken_dict)
+    #     for wordlist in bigram_dict.values():
+    #         for word in wordlist:
+    #             tokenize_word(word, token_dict, untoken_dict)
+
+    #     ## pickle dict
+    #     with open('token_dicts.pkl', 'wb') as f:
+    #         pickle.dump((token_dict, untoken_dict), f)
+
+    # else: # not tokenize_from_scratch
+    #     tokenized_train = []
+    #     training_data = np.load("tokenized_train.npy")
+    #     training_labels = np.load("train_labels.npy")
+    #     for i in range(training_labels.shape[0]):
+    #         ## append to dataset in the form ([sequence, mask], label)
+    #         sequence = torch.tensor(training_data[i*2:2*(i+1)]).to(device)
+    #         label = torch.tensor(training_labels[i]).to(device)
+
+    #         tokenized_train.append((sequence, label))
+
+    #     tokenized_val = []
+    #     val_data = np.load("tokenized_val.npy")
+    #     val_labels = np.load("val_labels.npy")
+    #     for i in range(val_labels.shape[0]):
+    #         ## append to dataset in the form ([sequence, mask], label)
+    #         sequence = torch.tensor(training_data[i*2:2*(i+1)]).to(device)
+    #         label = torch.tensor(training_labels[i]).to(device)
+
+    #         tokenized_val.append((sequence, label))
+        
+    #     with open('token_dicts.pkl', 'rb') as f:
+    #         token_dict, untoken_dict = pickle.load(f)
     ##### end tokenization
 
 
@@ -359,19 +411,6 @@ def main():
 
     model.eval()
 
-    extracted_grads = []
-    def extract_grad_hook(moddule, grad_in, grad_out):
-        extracted_grads.append(grad_out[0])
-
-    for module in model.modules():
-        if isinstance(module, torch.nn.Embedding):
-            embedding_matrix = module.weight.to(device).detach()
-            module.weight.requires_grad = True
-            module.register_full_backward_hook(extract_grad_hook)
-
-    universal_perturb_batch_size = 512
-
-
     ###
     positive_val_target = []
     ## batch size 1
@@ -394,25 +433,18 @@ def main():
     ## start with 10 random words here (not just always racist)
     initial_word = "black"
     trigger_len = 5
-    trigger_token_ids = initialize_tokens(initial_word, trigger_len)
+    trigger_words = initialize_trigger_words(initial_word, trigger_len)
     print(trigger_token_ids)
 
-    trigger_token_ids = [token_dict[word] for word in trigger_token_ids]
-    print(trigger_token_ids)
-    print(type(trigger_token_ids))
-    print(len(trigger_token_ids))
-    #trigger_token_ids = trigger_token_ids[:,1:-1]
-    #for i, lst in enumerate(trigger_token_ids):
-    #    trigger_token_ids[i] = lst[1:-1]
-    #trigger_token_ids = sum(trigger_token_ids, [])
+    trigger_token_ids = [token_dict[word] for word in trigger_words]
     print(trigger_token_ids)
     
     target_label = 1
 
     for i, batch in enumerate(positive_val_target):
         # candidate_trigger_token_ids = run_hotflip_attack(model, batch, device, loss_fn, embedding_matrix)
-        vocab = None
-        candidate_trigger_token_ids = synattack(trigger_token_ids, vocab, token_dict, untoken_dict, target_label, model, num_candidates=10)
+        
+        candidate_trigger_token_ids = synattack(trigger_token_ids, token_dict, untoken_dict, target_label, model, num_candidates=10)
         print(f"CANDIDATE TRIGGER TOKEN IDS BEFORE GETBESTCAND {candidate_trigger_token_ids}")
         trigger_token_ids = get_best_candidates(model, batch, device, trigger_token_ids, candidate_trigger_token_ids, beam_size=1)
 
@@ -429,7 +461,7 @@ def main():
         ## for random reinitialization of the tokens
         if random.uniform(0, 1) < 0.1:
             initial_word = random.choice(list(token_dict.keys()))
-            new_random_token_ids = initialize_tokens(initial_word, trigger_len)
+            new_random_trigger_words = initialize_trigger_words(initial_word, trigger_len)
             new_random_token_ids = [token_dict[word] for word in new_random_token_ids]
             new_random_token_ids = np.array(new_random_token_ids)
             new_random_token_ids = np.reshape(new_random_token_ids, (1,-1))
@@ -438,8 +470,6 @@ def main():
             if best_token_acc >= get_accuracy(model, device, positive_val_target, new_random_token_ids):
                 trigger_token_ids = new_random_token_ids
 
-        # get_accuracy(model, device, positive_val_target, trigger_token_ids)
-        # break
 
     # open the file in the write mode
     f = open('output.csv', 'w')

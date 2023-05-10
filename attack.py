@@ -2,17 +2,8 @@ import torch
 import random
 import numpy as np
 from nltk.corpus import wordnet as wn
-from preprocess import tokenize_word, initialize_tokens
+from preprocess import tokenize_word, initialize_trigger_words
 
-
-# ## this function is also defined in sst.py but is not imported from there due to 
-# ## an issue with cyclic imports
-# def tokenize_word(word, token_dict, untoken_dict):
-#     if word not in token_dict:
-#         token = len(token_dict) + 2 ## put in a +2 here to account for start and stop tokens
-#         token_dict[word] = token
-#         untoken_dict[token] = word
-#     return token_dict[word]
 
 def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1):
 
@@ -29,9 +20,13 @@ def hotflip(averaged_gradient, embedding_matrix, adv_token_ids, num_candidates=1
     _, best_at_step = grad_embedding.max(2)
     return best_at_step[0].detach().to(device).cpu().numpy()
 
-def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label, model, num_candidates=1):
+def synattack(adv_token_ids, token_dict, untoken_dict, adversarial_label, model, num_candidates=1):
+    """
+    adv_token_ids : 
+    """
     ## adv_token_ids shape: 10, (list)
-    ## returns 10x10 numpy array 
+
+    ## returns (10,10) numpy array 
 
     ## run model on adv_token padded to 512
     
@@ -47,15 +42,14 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
         padded_sentence = np.pad(copied_list, (0, 512 - len(adv_token_ids)), 'constant')
         mask = torch.zeros(512, dtype=torch.int64)
         mask[0:len(adv_token_ids)] = 1
+        ## 0 out attention mask for unk token
         mask[i] = 0
         torch_padded_sentence =  torch.from_numpy(padded_sentence).to(dtype=torch.long)
-        #inputs = torch.tensor([torch_padded_sentence, mask])
         inputs = torch.stack([torch_padded_sentence, mask], dim=0)
         inputs = torch.unsqueeze(inputs, 0).to(device)
         output = model(inputs)
         ##  append outputs to outputs[] 
 
-        ####### TODO: VERIFY THAT OUTPUT IS (1,2) OTHERWISE WE SHOULD SQUEEZE OR SOFTMAX ON DIM 0
         sm = torch.nn.Softmax(dim=1)
         output = sm(output)
         outputs.append(output)
@@ -63,9 +57,7 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
 
     ## pick the output with the lowest probability of adversarial label
     ## so min val of second column
-    ##outputs = torch.tensor(outputs)
     outputs = torch.stack(outputs, dim=0)
-    #print(outputs.shape)
     outputs = torch.squeeze(outputs)
     worst_index = torch.argmin(outputs[:,adversarial_label])
     ## get synset for worst word --> pick out num_candidates that are in the vocab
@@ -84,7 +76,7 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
         new_cand_tokens = []
         for i in range(5):
             initial_word = random.choice(list(token_dict.keys()))
-            initial_words = initialize_tokens(initial_word, 5)
+            initial_words = initialize_trigger_words(initial_word, 5)
             tokenized = [token_dict[word] for word in initial_words]
             new_cand_tokens.append(np.array(tokenized))
         return np.array(new_cand_tokens)
@@ -106,6 +98,19 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
 
 
 def run_hotflip_attack(model, batch, device, loss_fn, embedding_matrix):
+    
+    extracted_grads = []
+    def extract_grad_hook(moddule, grad_in, grad_out):
+        extracted_grads.append(grad_out[0])
+
+    for module in model.modules():
+        if isinstance(module, torch.nn.Embedding):
+            embedding_matrix = module.weight.to(device).detach()
+            module.weight.requires_grad = True
+            module.register_full_backward_hook(extract_grad_hook)
+
+    universal_perturb_batch_size = 512
+
     model.train()
     inputs, labels = batch
     inputs = inputs.to(device)

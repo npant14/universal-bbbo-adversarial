@@ -76,7 +76,7 @@ def tokenizing_sst2(sentence, token_dict, untoken_dict):
     return torch.stack([torch.tensor(tokenized_sentence),
                         torch.tensor(attention_mask)], dim=0)
 
-def initialize_tokens(initial_word, length):
+def initialize_trigger_words(initial_word, length):
     """
     function to initialize a trigger token sequence of length length from initial_word
     """
