@@ -15,7 +15,7 @@ class SentimentClassifier(torch.nn.Module):
         # self.embedding.weight.requires_grad = False
         self.vocab_size = vocab_size
         self.encoder = torch.nn.LSTM(embedding_dim,
-                                    hidden_size=512,
+                                    hidden_size=400,
                                     num_layers=2,
                                     batch_first=True)
         self.classifier = torch.nn.Linear(in_features=512,
@@ -23,7 +23,6 @@ class SentimentClassifier(torch.nn.Module):
 
     def forward(self, tokens):
         ## tokens should be batch, [sequence, mask], 512
-
         ## the sequences are the actual tokenized sequences
         sequences = tokens[:, 0]
 
@@ -34,22 +33,22 @@ class SentimentClassifier(torch.nn.Module):
         lengths = torch.sum(masks, dim=1)
 
         ## pack padded index expects the sequences to be sorted in increasing order
-        lengths, perm_idx = lengths.sort(0, descending=True)
-        x = sequences[perm_idx]
+        #lengths, perm_idx = lengths.sort(0, descending=True)
+        #x = sequences[perm_idx]
         
-        print(torch.min(x))
-        print(torch.max(x))
-        print(self.vocab_size)
-        x = self.embedding(x)
+        #print(torch.min(x))
+        #print(torch.max(x))
+        #print(self.vocab_size)
+        x = self.embedding(sequences)
         #lengths = Variable(torch.LongTensor(lengths.cpu()))
         #print(x.shape)
         #print(lengths.shape)
-        x = pack_padded_sequence(x, lengths.tolist(), batch_first=True)
+        x = pack_padded_sequence(x, [512]*sequences.shape[0], batch_first=True, enforce_sorted=False)
         
         x, (hn, cn) = self.encoder(x)
 
         x, input_sizes = pad_packed_sequence(x, batch_first=True)
-        x = self.classifier(x[:, -1, :])
+        x = self.classifier(x[:, :, -1])
 
         # should return (batch x 2) distribution
         return x

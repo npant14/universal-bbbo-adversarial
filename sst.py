@@ -66,7 +66,8 @@ os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 def get_accuracy(model, device, dataloader, trigger_token_ids=None):
     model.eval()
-    
+    #import pdb
+    #pdb.set_trace()
     if trigger_token_ids is None:
         total_examples = 0
         total_correct = 0
@@ -82,7 +83,6 @@ def get_accuracy(model, device, dataloader, trigger_token_ids=None):
 
             # Obtaining predictions from max value
             _, predicted = torch.max(outputs.data, 1)
-
             # Calculate the number of correct answers
             correct = (predicted == labels).sum().item()
 
@@ -242,7 +242,7 @@ def get_loss_per_candidate(index, model, batch, trigger_token_ids, cand_trigger_
 
 def main():
 
-    training_model = True
+    training_model = False
     tokenize_from_scratch = True
 
     train_dataset = torchtext.datasets.SST2(split = 'train')
@@ -385,9 +385,9 @@ def main():
 
     ## get acc
     print("initial training accuracy")
-    #print(get_accuracy(model, device, trainloader))
+    print(get_accuracy(model, device, trainloader))
     print("initial val accuracy")
-    #print(get_accuracy(model, device, positive_val_target))
+    print(get_accuracy(model, device, positive_val_target))
 
     model.train()
 

@@ -84,7 +84,9 @@ def synattack(adv_token_ids, vocab, token_dict, untoken_dict, adversarial_label,
         new_cand_tokens = []
         for i in range(5):
             initial_word = random.choice(list(token_dict.keys()))
-            new_cand_tokens.append(np.array(initialize_tokens(initial_word, 5)))
+            initial_words = initialize_tokens(initial_word, 5)
+            tokenized = [token_dict[word] for word in initial_words]
+            new_cand_tokens.append(np.array(tokenized))
         return np.array(new_cand_tokens)
     ## replace worst word with each synonym 
     new_candidate_tokens = []
